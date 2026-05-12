@@ -1,0 +1,25 @@
+name: Refresh league data
+
+# Pings the Netlify build hook on a schedule so Netlify rebuilds the site
+# with fresh Sleeper + FantasyCalc data. The actual ingest runs during the
+# Netlify build (see netlify.toml).
+#
+# Required repo secret:
+#   NETLIFY_BUILD_HOOK_URL — generate one in Netlify (Site settings → Build &
+#                            deploy → Build hooks). The workflow is a no-op
+#                            without it.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger-rebuild:
+    runs-on: ubuntu-latest
+    env:
+      NETLIFY_BUILD_HOOK_URL: ${{ secrets.NETLIFY_BUILD_HOOK_URL }}
+    steps:
+      - name: Trigger Netlify build
+        if: env.NETLIFY_BUILD_HOOK_URL != ''
+        run: curl -fsSL -X POST -d {} "$NETLIFY_BUILD_HOOK_URL"

@@ -1,0 +1,272 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------- Tokens (light default) ---------- */
+:root,
+.light {
+  --background: #fafaf9;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-glass: rgba(255, 255, 255, 0.78);
+
+  --border: #e7e5e4;
+  --border-strong: #d6d3d1;
+
+  --foreground: #0a0a0b;
+  --foreground-muted: #52525b;
+  --foreground-subtle: #71717a;
+
+  --accent-primary: #b8851a;
+  --accent-primary-soft: rgba(184, 133, 26, 0.10);
+  --accent-primary-glow: rgba(184, 133, 26, 0.18);
+
+  --accent-secondary: #1d7878;
+  --accent-secondary-soft: rgba(29, 120, 120, 0.10);
+
+  --positive: #15803d;
+  --negative: #b91c1c;
+  --warning: #b45309;
+
+  /* Row + rule tokens (P2) — subtler than --border, used by DataTable + Card row variant. */
+  --rule: rgba(0, 0, 0, 0.06);
+  --row-hover: rgba(0, 0, 0, 0.025);
+  --row-accent-positive: var(--positive);
+  --row-accent-negative: var(--negative);
+
+  /* Trend-tinted strokes (P6). Less saturated than --positive/--negative so
+     sparkline strokes don't compete with text in the row. */
+  --trend-positive-soft: #16a34a;
+  --trend-negative-soft: #dc2626;
+
+  /* Motion tokens (P0) — total page motion budget ≤ 250ms. */
+  --motion-instant: 75ms;
+  --motion-quick: 150ms;
+}
+
+/* ---------- Dark mode override ---------- */
+.dark {
+  --background: #0a0a0b;
+  --surface: #111113;
+  --surface-elevated: #17171a;
+  --surface-glass: rgba(17, 17, 19, 0.72);
+
+  --border: #1f1f24;
+  --border-strong: #2a2a32;
+
+  --foreground: #fafafa;
+  --foreground-muted: #a1a1aa;
+  --foreground-subtle: #8a8a92;
+
+  --accent-primary: #f5b54a;
+  --accent-primary-soft: rgba(245, 181, 74, 0.12);
+  --accent-primary-glow: rgba(245, 181, 74, 0.25);
+
+  --accent-secondary: #3aa9a9;
+  --accent-secondary-soft: rgba(58, 169, 169, 0.12);
+
+  --positive: #22c55e;
+  --negative: #ef4444;
+  --warning: #f59e0b;
+
+  /* Row + rule tokens (P2) — dark variants. */
+  --rule: rgba(255, 255, 255, 0.07);
+  --row-hover: rgba(255, 255, 255, 0.025);
+  --row-accent-positive: var(--positive);
+  --row-accent-negative: var(--negative);
+
+  /* Trend-tinted strokes (P6) — dark variants. */
+  --trend-positive-soft: #34d399;
+  --trend-negative-soft: #f87171;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-glass: var(--surface-glass);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+
+  --color-accent: var(--accent-primary);
+  --color-accent-soft: var(--accent-primary-soft);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-secondary-soft: var(--accent-secondary-soft);
+
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+
+  --color-rule: var(--rule);
+  --color-row-hover: var(--row-hover);
+  --color-row-accent-positive: var(--row-accent-positive);
+  --color-row-accent-negative: var(--row-accent-negative);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-instrument-serif);
+}
+
+/* ---------- Base ---------- */
+html {
+  background: var(--background);
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* ---------- Display utilities ---------- */
+.font-display {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ---------- Editorial kicker — used everywhere as section identifier ---------- */
+.kicker {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 0.75rem;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+}
+
+.kicker-muted {
+  color: var(--foreground-subtle);
+}
+
+/* ---------- Hairline — used to draw 1px subtle dividers ---------- */
+.hairline {
+  background: var(--border);
+  height: 1px;
+  width: 100%;
+}
+
+/* ---------- Card glow on hover (interactive variant) ---------- */
+/* Glow lives on a ::after overlay so the hover transition only animates
+   transform + opacity (composited). Animating box-shadow would force paints
+   on every frame — Lighthouse flags it as a non-composited animation. */
+.card-interactive {
+  position: relative;
+  transition:
+    transform 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-interactive::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow:
+    0 0 0 1px var(--border-strong),
+    0 18px 40px -24px var(--accent-primary-glow);
+  transition: opacity 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+.card-interactive:hover::after {
+  opacity: 1;
+}
+
+/* ---------- Avatar ring (gradient amber → teal) ---------- */
+.avatar-ring {
+  background: conic-gradient(
+    from 180deg,
+    var(--accent-primary),
+    var(--accent-secondary),
+    var(--accent-primary)
+  );
+  padding: 2px;
+  border-radius: 9999px;
+}
+
+/* ---------- View Transitions ---------- */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- Reduced motion: kill movement, keep opacity ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Scrollbar — subtle, only visible on hover ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+/* ---------- Selection ---------- */
+::selection {
+  background: var(--accent-primary-soft);
+  color: var(--foreground);
+}
+
+/* ---------- Editorial: ornate rule with center dingbat ---------- */
+/* Two hairlines flanking a centered ornament — used as a section break under
+   the masthead and between editorial blocks. The ornament inherits font-display
+   so it sits in the same italic register as the title. */
+.editorial-rule {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--accent-primary);
+  user-select: none;
+}
+.editorial-rule::before,
+.editorial-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-strong);
+}

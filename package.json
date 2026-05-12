@@ -1,0 +1,54 @@
+{
+  "name": "league-page-next",
+  "version": "0.1.0",
+  "description": "Open-source Next.js site for Sleeper fantasy football leagues. Dynasty-aware standings, head-to-head, records, FantasyCalc-driven rankings, and a multi-season archive. Single-tenant, static-built, $0/year on Netlify.",
+  "license": "MIT",
+  "author": "Tyler Dodd",
+  "keywords": [
+    "sleeper",
+    "fantasy-football",
+    "dynasty",
+    "nextjs",
+    "league-page",
+    "template"
+  ],
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "ingest": "tsx scripts/ingest.ts"
+  },
+  "dependencies": {
+    "@mdx-js/loader": "^3.1.1",
+    "@mdx-js/react": "^3.1.1",
+    "@next/mdx": "^16.2.4",
+    "@types/mdx": "^2.0.13",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.14.0",
+    "next": "15.5.15",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "tailwind-merge": "^2.5.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.15",
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.8",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
