@@ -1,5 +1,5 @@
 {
-  "name": "league-page-next",
+  "name": "league-page-template",
   "version": "0.1.0",
   "description": "Open-source Next.js site for Sleeper fantasy football leagues. Dynasty-aware standings, head-to-head, records, FantasyCalc-driven rankings, and a multi-season archive. Single-tenant, static-built, $0/year on Netlify.",
   "license": "MIT",
@@ -29,7 +29,7 @@
     "@types/mdx": "^2.0.13",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
-    "next": "15.5.15",
+    "next": "15.5.18",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "tailwind-merge": "^2.5.0"
@@ -41,7 +41,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.15",
+    "eslint-config-next": "15.5.18",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.8",
     "tailwindcss": "^4",
