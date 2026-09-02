@@ -16,6 +16,7 @@ import {
   getStandings,
   getWeeklyPointsByRoster,
   listCachedSeasons,
+  seasonHasResults,
 } from "@/lib/data";
 import type { SeasonStanding } from "@/lib/types";
 
@@ -33,8 +34,7 @@ export default async function StandingsPage({ searchParams }: PageProps) {
   const { season: currentSeason, league } = await getCurrentLeague();
   const seasons = await listCachedSeasons();
 
-  const currentHasResults =
-    league.status === "in_season" || league.status === "complete";
+  const currentHasResults = await seasonHasResults(currentSeason);
   const fallbackSeason = currentHasResults
     ? null
     : (seasons.find((s) => s !== currentSeason) ?? null);

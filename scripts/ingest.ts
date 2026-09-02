@@ -12,7 +12,7 @@ import {
   withDefaultSlot,
 } from "../src/lib/fantasycalc";
 import type { FantasyCalcEntry } from "../src/lib/fantasycalc";
-import { sleeper, walkLeagueChain } from "../src/lib/sleeper";
+import { isPlayedWeek, sleeper, walkLeagueChain } from "../src/lib/sleeper";
 import type {
   SleeperLeague,
   SleeperRoster,
@@ -121,6 +121,7 @@ async function ingestSeason(league: SleeperLeague): Promise<{
 
   const maxWeek = maxIngestWeek(league);
   let matchupWeeks = 0;
+  let skippedWeeks = 0;
   let transactionsCount = 0;
   let projectionWeeks = 0;
 
@@ -136,12 +137,17 @@ async function ingestSeason(league: SleeperLeague): Promise<{
         },
       ),
     ]);
-    if (matchups.length > 0) {
+    // Sleeper returns the full schedule as 0-point stubs once the league is
+    // in_season. Only persist weeks that have actually been played (or are in
+    // progress); the site treats a cached week as a played week.
+    if (isPlayedWeek(matchups)) {
       await writeJson(
         path.join(dir, `matchups-${String(week).padStart(2, "0")}.json`),
         matchups,
       );
       matchupWeeks += 1;
+    } else if (matchups.length > 0) {
+      skippedWeeks += 1;
     }
     if (transactions.length > 0) {
       await writeJson(
@@ -172,7 +178,7 @@ async function ingestSeason(league: SleeperLeague): Promise<{
   }
 
   console.log(
-    `  rosters=${rosters.length} users=${users.length} traded_picks=${tradedPicks.length} drafts=${drafts.length} matchup_weeks=${matchupWeeks} tx=${transactionsCount} projection_weeks=${projectionWeeks}`,
+    `  rosters=${rosters.length} users=${users.length} traded_picks=${tradedPicks.length} drafts=${drafts.length} matchup_weeks=${matchupWeeks} unplayed_weeks_skipped=${skippedWeeks} tx=${transactionsCount} projection_weeks=${projectionWeeks}`,
   );
 
   return {
