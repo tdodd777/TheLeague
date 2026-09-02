@@ -26,6 +26,16 @@ function potentialPoints(roster: SleeperRoster): number {
   return decimalsTo(roster.settings.ppts, roster.settings.ppts_decimal);
 }
 
+/**
+ * True once at least one roster has a W, L, or T on the books. `league.status`
+ * alone isn't enough: Sleeper flips to `in_season` before Week 1 kicks off,
+ * so an in-season league can still have an all-zero table.
+ */
+export async function seasonHasResults(season: string): Promise<boolean> {
+  const standings = await getStandings(season);
+  return standings.some((s) => s.wins + s.losses + s.ties > 0);
+}
+
 export async function getStandings(season: string): Promise<SeasonStanding[]> {
   const [rosters, managers] = await Promise.all([
     readRosters(season),

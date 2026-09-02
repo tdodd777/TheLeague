@@ -5,6 +5,7 @@ import {
   getCurrentLeague,
   getStandings,
   listCachedSeasons,
+  seasonHasResults,
 } from "@/lib/data";
 import type { SeasonStanding } from "@/lib/types";
 
@@ -13,10 +14,9 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function OG() {
-  const { season: currentSeason, league } = await getCurrentLeague();
+  const { season: currentSeason } = await getCurrentLeague();
   const seasons = await listCachedSeasons();
-  const currentHasResults =
-    league.status === "in_season" || league.status === "complete";
+  const currentHasResults = await seasonHasResults(currentSeason);
   const fallback = currentHasResults
     ? null
     : (seasons.find((s) => s !== currentSeason) ?? null);

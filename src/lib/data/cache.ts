@@ -11,6 +11,7 @@ import type {
   SleeperTransaction,
   SleeperUser,
 } from "@/lib/sleeper";
+import { isPlayedWeek } from "@/lib/sleeper";
 
 import { LEAGUE_CACHE_DIR, PLAYERS_PATH, seasonDir } from "./paths";
 
@@ -69,6 +70,16 @@ export async function readDrafts(season: string): Promise<SleeperDraft[]> {
   return readJson<SleeperDraft[]>(path.join(seasonDir(season), "drafts.json"));
 }
 
+/**
+ * Matchups for a (season, week), or null when the week has no results.
+ *
+ * "No results" covers both a missing cache file and a cached file whose
+ * entries are all `points: 0`. Sleeper publishes the whole regular-season
+ * schedule as zero-point stubs the moment a league goes `in_season`, so a
+ * file on disk is not proof the week was played. Every consumer of this
+ * function (scoreboards, sparklines, all-play/luck, H2H, records, the
+ * latest-week redirect) wants played weeks only, so the filter lives here.
+ */
 export async function readMatchups(
   season: string,
   week: number,
@@ -77,7 +88,9 @@ export async function readMatchups(
     seasonDir(season),
     `matchups-${String(week).padStart(2, "0")}.json`,
   );
-  return readJsonOrNull<SleeperMatchup[]>(file);
+  const matchups = await readJsonOrNull<SleeperMatchup[]>(file);
+  if (!matchups || !isPlayedWeek(matchups)) return null;
+  return matchups;
 }
 
 /** Per-player projected points for a given (season, week). Map keys are sleeper player_ids. */

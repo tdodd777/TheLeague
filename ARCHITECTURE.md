@@ -105,7 +105,9 @@ data/
   players.json                  ~5 MB Sleeper player metadata (gitignored, regen via ingest)
   values-snapshots/<date>.json  FantasyCalc dynasty + redraft values (gitignored, regen via ingest)
   league-cache/<season>/        league.json, users, rosters, traded_picks,
-                                drafts, matchups-NN.json, transactions-NN.json,
+                                drafts, matchups-NN.json (played weeks only —
+                                Sleeper's 0-point schedule stubs are skipped),
+                                transactions-NN.json,
                                 projections-NN.json (slim: pts_ppr only),
                                 winners_bracket.json, losers_bracket.json
                                 (gitignored, regen via ingest)
