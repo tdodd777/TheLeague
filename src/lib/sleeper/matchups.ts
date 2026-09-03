@@ -13,10 +13,21 @@ export function hasScore(matchup: SleeperMatchup): boolean {
 }
 
 /**
- * True when at least one roster has put points on the board this week —
- * i.e. the week is in progress or complete, rather than a future schedule stub.
+ * True when the roster actually has a game this week. Sleeper returns
+ * `matchup_id: null` for rosters with no opponent: teams eliminated from the
+ * playoff bracket, and every roster in the unused NFL week 18 (rosters still
+ * accrue points there, but nobody is playing anybody).
+ */
+export function isScheduled(matchup: SleeperMatchup): boolean {
+  return matchup.matchup_id != null;
+}
+
+/**
+ * True when at least one scheduled roster has put points on the board this
+ * week, i.e. the week is in progress or complete, rather than a future
+ * schedule stub or a week with no matchups at all.
  */
 export function isPlayedWeek(matchups: ReadonlyArray<SleeperMatchup> | null | undefined): boolean {
   if (!matchups || matchups.length === 0) return false;
-  return matchups.some(hasScore);
+  return matchups.some((m) => isScheduled(m) && hasScore(m));
 }
