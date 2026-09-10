@@ -65,6 +65,8 @@ function buildCurrentYearSlotByRoster(
  *     draft.draft_order if available (it is once the draft is scheduled).
  *   - Future years: slot left as null. The caller passes through
  *     `withDefaultSlot` (slot 7 mid-round default) before resolving.
+ *   - A season whose draft is `complete` is dropped entirely; its picks are
+ *     players now.
  */
 export function buildPickPortfolios(
   league: SleeperLeague,
@@ -74,9 +76,19 @@ export function buildPickPortfolios(
   options: { seasons?: readonly number[] } = {},
 ): Map<number, PickIdentity[]> {
   const currentYear = Number(league.season);
-  const seasons =
+  // A season whose rookie draft has run no longer has picks: every one of
+  // them became a player who is already on a roster, so keeping the pick too
+  // would value the same asset twice. Sleeper keeps those rows in
+  // traded_picks, so filter here rather than trusting the ledger.
+  const drafted = new Set(
+    drafts
+      .filter((d) => d.status === "complete")
+      .map((d) => Number(d.season)),
+  );
+  const seasons = (
     options.seasons ??
-    [currentYear, currentYear + 1, currentYear + 2, currentYear + 3];
+    [currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
+  ).filter((season) => !drafted.has(season));
   const portfolios = originalPicks(rosters, league, seasons);
 
   // Apply pick trades. The Sleeper schema:

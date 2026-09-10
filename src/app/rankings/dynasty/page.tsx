@@ -15,7 +15,7 @@ import {
 import { MetricExplainer } from "@/components/rankings/MetricExplainer";
 import { RankingsCaveats } from "@/components/rankings/RankingsCaveats";
 import { positionColor, trendColor } from "@/components/rankings/palette";
-import { buildDynastyRankings } from "@/lib/rankings";
+import { buildDynastyRankings, computeStarterValueCoverage } from "@/lib/rankings";
 import type { RosterValueBreakdown, ValuedAsset } from "@/lib/rankings";
 
 export const dynamic = "force-static";
@@ -33,6 +33,9 @@ function median(values: number[]): number {
 export default async function DynastyRankingsPage() {
   const ranking = await buildDynastyRankings();
   const top = ranking.rosters[0];
+  // K/DEF disclosure for the explainer. Identical for every roster (one K
+  // slot, one DEF slot), so the first breakdown speaks for all twelve.
+  const coverage = top ? computeStarterValueCoverage(top.starters) : null;
   const median50 = median(ranking.rosters.map((r) => r.total));
   const totalLeagueValue = ranking.rosters.reduce((s, r) => s + r.total, 0);
 
@@ -75,6 +78,14 @@ export default async function DynastyRankingsPage() {
             { term: "Top-five bench × 0.5", def: "Useful depth or trade pieces, but not on the field." },
             { term: "Reserve × 0.2 / Taxi × 0.4", def: "Lottery tickets and developmental assets, valued conservatively." },
             { term: "Picks × 1.0 + 15% stud kicker", def: "Picks count full value; any starter above 6,000 earns a top-heavy bonus." },
+            ...(coverage && coverage.unvaluedStarters > 0
+              ? [
+                  {
+                    term: `${coverage.unvaluedPositions.join(" / ")}: not priced`,
+                    def: `FantasyCalc carries no values for ${coverage.unvaluedPositions.join(" or ")}, so the ${coverage.unvaluedStarters} starting slots they fill are excluded from every value figure rather than counted as zero. Every roster starts the same ${coverage.unvaluedStarters}, so no ranking moves.`,
+                  },
+                ]
+              : []),
           ]}
         />
       </section>
@@ -142,7 +153,8 @@ export default async function DynastyRankingsPage() {
             description="Younger and more valuable is better. Bubble color shows 30-day trend (green up, red down). Off-season trends are noisy."
             size="md"
           />
-          <Card variant="default" padding="md">
+          {/* Desktop chart; the phone gets a readable list of the same data. */}
+          <Card variant="default" padding="md" className="hidden lg:block">
             <ScatterPlot
               points={scatterPoints}
               width={780}
@@ -151,6 +163,26 @@ export default async function DynastyRankingsPage() {
               yLabel="starter value"
             />
           </Card>
+          <ul className="lg:hidden flex flex-col border-t border-rule">
+            {[...scatterPoints]
+              .sort((a, b) => b.y - a.y)
+              .map((p) => (
+                <li
+                  key={p.label}
+                  className="flex min-h-11 items-center gap-3 border-b border-rule py-2"
+                >
+                  <span className="flex-1 min-w-0 font-display italic text-[17px] text-foreground">
+                    {p.label}
+                  </span>
+                  <span className="tabular text-sm text-foreground shrink-0">
+                    {Math.round(p.y).toLocaleString()}
+                  </span>
+                  <span className="tabular text-[11px] text-foreground-subtle w-16 text-right shrink-0">
+                    {p.x.toFixed(1)} yrs
+                  </span>
+                </li>
+              ))}
+          </ul>
         </section>
       ) : null}
 

@@ -47,7 +47,12 @@ export default async function StandingsPage({ searchParams }: PageProps) {
         : (fallbackSeason ?? currentSeason);
 
   const standings = await getStandings(renderedSeason);
-  const weekly = await getWeeklyPointsByRoster(renderedSeason);
+  // Regular season: this table's record and PF columns come from roster
+  // settings, which stop at the playoffs, so the sparkline beside them has to
+  // cover the same weeks.
+  const weekly = await getWeeklyPointsByRoster(renderedSeason, {
+    scope: "regular",
+  });
   const rows: StandingsRow[] = standings.map((s, i) => ({
     ...s,
     rank: i + 1,
@@ -65,12 +70,12 @@ export default async function StandingsPage({ searchParams }: PageProps) {
       <section className="relative overflow-hidden border-b border-border">
         <div className="relative mx-auto max-w-6xl px-4 sm:px-6 pt-10 pb-10 sm:pt-14 sm:pb-12">
           <SectionHeader
-            kicker={`${renderedSeason} ${currentHasResults && renderedSeason === currentSeason ? "Standings" : "Final"}`}
+            kicker={`${renderedSeason} ${renderedSeason === currentSeason ? "Standings" : "Final Regular Season"}`}
             title="Standings"
             description={
               isFallback
-                ? `${currentSeason} hasn't kicked off — showing the final ${renderedSeason} table.`
-                : `${totalGames} games played · top ${playoffSpots} make the playoffs.`
+                ? `${currentSeason} hasn't kicked off, so this is the final ${renderedSeason} table.`
+                : `Regular season · ${totalGames} games played · top ${playoffSpots} make the playoffs.`
             }
             size="lg"
             actions={
@@ -88,7 +93,7 @@ export default async function StandingsPage({ searchParams }: PageProps) {
           />
         ) : (
           <>
-            {/* Card stack — canonical view for phone + tablet (per ARCHITECTURE.md §7). */}
+            {/* Card stack — canonical view for phone + tablet (per DESIGN.md). */}
             <div className="lg:hidden border-y border-rule">
               {rows.map((r) => (
                 <StandingsMobileCard
@@ -124,8 +129,8 @@ function SeasonPills({
           href={s === active ? "/standings" : `/standings?season=${s}`}
           className={
             s === active
-              ? "px-3 py-1 rounded-md bg-foreground/[0.06] text-foreground text-xs font-medium tabular"
-              : "px-3 py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-xs tabular transition-colors"
+              ? "inline-flex min-h-11 lg:min-h-0 items-center px-3 lg:py-1 rounded-md bg-foreground/[0.06] text-foreground text-sm lg:text-xs font-medium tabular focus-hairline"
+              : "inline-flex min-h-11 lg:min-h-0 items-center px-3 lg:py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-sm lg:text-xs tabular transition-colors focus-hairline"
           }
         >
           {s}
@@ -229,7 +234,6 @@ function StandingsDesktopTable({
               width={96}
               height={20}
               tintTrend
-              fillGradient
             />
             <span className="text-xs text-foreground-muted tabular tabular w-12 text-right">
               {(r.weekly.reduce((a, b) => a + b, 0) / r.weekly.length).toFixed(0)}
@@ -336,7 +340,6 @@ function StandingsMobileCard({
             width={56}
             height={20}
             tintTrend
-            fillGradient
             className="shrink-0"
             endDot={false}
           />

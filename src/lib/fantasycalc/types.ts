@@ -55,8 +55,8 @@ export interface FantasyCalcParams {
  *   - "YYYY Nth"      - round only, used for years 2+ from the current draft
  *     (e.g. "2027 1st"). slot is null.
  *
- * No Early/Mid/Late tiering exists in the live API — future-year picks
- * resolve by round only. See ARCHITECTURE.md §6.
+ * RANKINGS.md described an Early/Mid/Late tiering scheme; the live API does
+ * not use that. We resolve future-year picks by round only.
  */
 export interface PickIdentity {
   season: number;

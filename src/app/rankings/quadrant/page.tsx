@@ -7,111 +7,16 @@ import {
   Pill,
   ScatterPlot,
   SectionHeader,
-  type ScatterPoint,
 } from "@/components/ui";
 import { MetricExplainer } from "@/components/rankings/MetricExplainer";
 import { RankingsCaveats } from "@/components/rankings/RankingsCaveats";
-import { trendColor } from "@/components/rankings/palette";
-import {
-  buildDynastyRankings,
-  buildSeasonRankings,
-  type RosterValueBreakdown,
-  type SeasonPowerBreakdown,
-} from "@/lib/rankings";
-import { isTrendSuppressed } from "@/lib/rankings/constants";
+import { buildQuadrant, type QuadrantEntry } from "@/lib/rankings/quadrant";
 
 export const dynamic = "force-static";
 
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) return ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
-  return sorted[mid] ?? 0;
-}
-
-interface Combined {
-  rosterId: number;
-  manager: SeasonPowerBreakdown["manager"];
-  seasonPower: number;
-  dynastyTotal: number;
-  starterAge: number | null;
-  trend30d: number;
-  username: string;
-}
-
 export default async function QuadrantPage() {
-  const [{ power }, dynasty] = await Promise.all([
-    buildSeasonRankings(),
-    buildDynastyRankings(),
-  ]);
-
-  const dynastyByRoster = new Map<number, RosterValueBreakdown>(
-    dynasty.rosters.map((r) => [r.rosterId, r] as const),
-  );
-
-  const combined: Combined[] = power
-    .map((p) => {
-      const d = dynastyByRoster.get(p.rosterId);
-      if (!d) return null;
-      return {
-        rosterId: p.rosterId,
-        manager: p.manager,
-        username: p.manager.username,
-        seasonPower: p.total,
-        dynastyTotal: d.total,
-        starterAge: d.starterAvgAge,
-        trend30d: d.trend30Day,
-      };
-    })
-    .filter((x): x is Combined => x !== null);
-
-  const xMedian = median(combined.map((c) => c.seasonPower));
-  const yMedian = median(combined.map((c) => c.dynastyTotal));
-  const minAge = Math.min(
-    ...combined.map((c) => c.starterAge ?? 28).filter((a) => Number.isFinite(a)),
-  );
-  const maxAge = Math.max(
-    ...combined.map((c) => c.starterAge ?? 28).filter((a) => Number.isFinite(a)),
-  );
-  const ageRange = maxAge - minAge || 1;
-
-  const month = new Date().getUTCMonth() + 1;
-  const trendSuppressed = isTrendSuppressed(month);
-
-  const points: ScatterPoint[] = combined.map((c) => {
-    // Bubble size: smaller = younger (better). Scale 5 → 14 px.
-    const ageNorm = c.starterAge !== null ? (c.starterAge - minAge) / ageRange : 0.5;
-    const r = 5 + ageNorm * 9;
-    const color = trendSuppressed ? "var(--accent-primary)" : trendColor(c.trend30d);
-    return {
-      id: String(c.rosterId),
-      x: c.seasonPower,
-      y: c.dynastyTotal,
-      r,
-      color,
-      label: c.username,
-    };
-  });
-
-  // Bucket each manager into a quadrant.
-  function classify(c: Combined): "Contender" | "Win-Now" | "Rebuilder" | "Stuck" {
-    const sa = c.seasonPower >= xMedian;
-    const da = c.dynastyTotal >= yMedian;
-    if (sa && da) return "Contender";
-    if (sa && !da) return "Win-Now";
-    if (!sa && da) return "Rebuilder";
-    return "Stuck";
-  }
-  const buckets: Record<string, Combined[]> = {
-    Contender: [],
-    "Win-Now": [],
-    Rebuilder: [],
-    Stuck: [],
-  };
-  for (const c of combined) {
-    buckets[classify(c)]!.push(c);
-  }
+  const { points, xMedian, yMedian, trendSuppressed, buckets } =
+    await buildQuadrant();
 
   return (
     <>
@@ -139,7 +44,12 @@ export default async function QuadrantPage() {
         />
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-8">
+      {/*
+        The chart is desktop-only. At 390px the 780px SVG scales to ~0.41, which
+        renders its 10px labels at roughly 4px. The quadrant lists below carry
+        the same classification and are readable on a phone.
+      */}
+      <section className="hidden lg:block mx-auto max-w-6xl px-4 sm:px-6 mt-8">
         <Card variant="default" padding="md">
           <ScatterPlot
             points={points}
@@ -208,7 +118,7 @@ function QuadrantList({
   title: string;
   subtitle: string;
   tone: "positive" | "negative" | "accent" | "warning";
-  managers: Combined[];
+  managers: QuadrantEntry[];
 }) {
   return (
     <Card variant="default" padding="md">

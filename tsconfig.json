@@ -35,10 +35,13 @@
     }
   },
   "include": [
+    ".next-build-audit/types/**/*.ts",
+    ".next-build/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    ".next-prod-audit/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

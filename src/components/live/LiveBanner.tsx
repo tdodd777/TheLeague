@@ -41,11 +41,24 @@ function closestGame(list: SleeperMatchup[]): Pair | null {
 
 export function LiveBanner({ leagueId, managers }: Props) {
   const path = usePathname();
-  const { mode, matchups } = useLiveMatchups({ leagueId });
+  // Home is the only page that renders LiveScoreboard, so there the banner
+  // would duplicate a scoreboard already on screen. The matchup and manager
+  // pages render no live component at all; they are suppressed because the
+  // banner links to /matchups and would be pointing at the page you are
+  // already on, or at a season and week you deliberately navigated away from.
+  // Gate the hook rather than only the render: starting the poll and then
+  // returning null would run a second copy of the same 30s fetch loop.
+  const suppressed =
+    path === "/" ||
+    path.startsWith("/matchups") ||
+    /^\/managers\/[^/]+$/.test(path);
+  const { mode, matchups } = useLiveMatchups({
+    leagueId,
+    enabled: !suppressed,
+  });
 
+  if (suppressed) return null;
   if (mode.phase !== "active" || !matchups) return null;
-  if (path === "/" || path.startsWith("/matchups")) return null;
-  if (/^\/managers\/[^/]+$/.test(path)) return null;
 
   const pair = closestGame(matchups);
   if (!pair) return null;
@@ -59,7 +72,9 @@ export function LiveBanner({ leagueId, managers }: Props) {
   return (
     <Link
       href="/matchups"
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-3 rounded-full border border-border bg-surface-elevated/95 backdrop-blur-md px-4 py-2 text-xs shadow-lg hover:border-border-strong transition-colors"
+      // Below lg the bottom tab bar owns the bottom edge (3.5rem + safe-area
+      // inset), so float the same 1rem gap above it instead of behind it.
+      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-4 left-1/2 -translate-x-1/2 z-40 inline-flex min-h-11 items-center gap-3 rounded-full border border-border bg-surface-elevated/95 backdrop-blur-md px-4 py-2 text-xs shadow-lg hover:border-border-strong transition-colors"
     >
       <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-positive opacity-75" />

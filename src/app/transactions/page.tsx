@@ -103,15 +103,6 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      {managerUserId ? (
-        <ManagerStatStrip userId={managerUserId} />
-      ) : (
-        <GlobalStatStrip
-          all={all}
-          seasons={seasonsRepresented.size}
-        />
-      )}
-
       <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 sm:mt-12 flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -125,8 +116,8 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
                     scroll={false}
                     className={
                       active
-                        ? "px-3 py-1 rounded-md bg-foreground/[0.06] text-foreground text-xs font-medium"
-                        : "px-3 py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-xs transition-colors"
+                        ? "inline-flex min-h-11 lg:min-h-0 items-center px-3 lg:py-1 rounded-md bg-foreground/[0.06] text-foreground text-sm lg:text-xs font-medium focus-hairline"
+                        : "inline-flex min-h-11 lg:min-h-0 items-center px-3 lg:py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-sm lg:text-xs transition-colors focus-hairline"
                     }
                   >
                     {f.label}
@@ -177,6 +168,17 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           />
         </div>
       </section>
+
+      {/* Totals sit under the feed: on a phone they pushed the filter row and
+          its results two screens down, so a filter tap showed no change. */}
+      {managerUserId ? (
+        <ManagerStatStrip userId={managerUserId} />
+      ) : (
+        <GlobalStatStrip
+          all={all}
+          seasons={seasonsRepresented.size}
+        />
+      )}
     </main>
   );
 }

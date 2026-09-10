@@ -155,7 +155,11 @@ async function augmentWithSeasonPower(
 ): Promise<SeasonPowerBreakdown[]> {
   const { season } = ranking;
   const standings = await getStandings(season);
-  const weeklyMap = await getWeeklyPointsByRoster(season);
+  // Regular season only. Every downstream number divides by these weeks against
+  // a standings row (points for, wins, losses) that stops at the playoffs, so
+  // including bracket weeks would put a 14-week numerator over an 18-week
+  // denominator and make PPG, all-play, and schedule luck all wrong.
+  const weeklyMap = await getWeeklyPointsByRoster(season, { scope: "regular" });
 
   // Detect pre-season: if no games at all across the league, weeklyMap will
   // either be empty or all rosters have 0 games. In that case all the
@@ -178,7 +182,13 @@ async function augmentWithSeasonPower(
       manager: breakdown.manager,
       seasonValue: breakdown,
       weekly: wk,
-      pointsFor: st?.pf ?? 0,
+      // Sum the weeks actually in scope rather than reading `settings.fpts`.
+      // Sleeper updates that field live, but `weekly` deliberately excludes the
+      // week in progress, so from Thursday night to Tuesday morning the two
+      // disagree: a 14-week numerator over a 13-game denominator. That inflated
+      // every PPG by ~7% and pushed league-wide schedule luck to +6.00 instead
+      // of 0, which is enough to name the wrong manager as unluckiest.
+      pointsFor: wk.reduce((sum, pts) => sum + pts, 0),
       actualWins: st?.wins ?? 0,
       actualLosses: st?.losses ?? 0,
       actualTies: st?.ties ?? 0,
@@ -206,7 +216,8 @@ export async function buildHistoricalSeasonContext(historicalSeason: string): Pr
     readRosters(historicalSeason),
     getManagers(historicalSeason),
     getStandings(historicalSeason),
-    getWeeklyPointsByRoster(historicalSeason),
+    // Regular season only, for the same reason as the current-season path.
+    getWeeklyPointsByRoster(historicalSeason, { scope: "regular" }),
     readPlayers(),
   ]);
 
@@ -254,7 +265,13 @@ export async function buildHistoricalSeasonContext(historicalSeason: string): Pr
       manager,
       seasonValue: breakdown,
       weekly: wk,
-      pointsFor: st?.pf ?? 0,
+      // Sum the weeks actually in scope rather than reading `settings.fpts`.
+      // Sleeper updates that field live, but `weekly` deliberately excludes the
+      // week in progress, so from Thursday night to Tuesday morning the two
+      // disagree: a 14-week numerator over a 13-game denominator. That inflated
+      // every PPG by ~7% and pushed league-wide schedule luck to +6.00 instead
+      // of 0, which is enough to name the wrong manager as unluckiest.
+      pointsFor: wk.reduce((sum, pts) => sum + pts, 0),
       actualWins: st?.wins ?? 0,
       actualLosses: st?.losses ?? 0,
       actualTies: st?.ties ?? 0,

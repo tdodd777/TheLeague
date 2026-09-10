@@ -17,9 +17,13 @@
   --foreground-muted: #52525b;
   --foreground-subtle: #71717a;
 
-  --accent-primary: #b8851a;
-  --accent-primary-soft: rgba(184, 133, 26, 0.10);
-  --accent-primary-glow: rgba(184, 133, 26, 0.18);
+  /* 5.6:1 on --background (#fafaf9) and 5.0:1 on the --accent-primary-soft
+     chip tint. The previous #966b16 passed the plain background (4.56:1) but
+     measured ~4.4:1 on accent-soft record chips and failed AA there; #b8851a
+     before it measured 3.14:1 and failed even the plain-background kickers. */
+  --accent-primary: #855d12;
+  --accent-primary-soft: rgba(133, 93, 18, 0.10);
+  --accent-primary-glow: rgba(133, 93, 18, 0.18);
 
   --accent-secondary: #1d7878;
   --accent-secondary-soft: rgba(29, 120, 120, 0.10);
@@ -125,7 +129,10 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-  font-feature-settings: "ss01", "cv11";
+  /* `tnum` here is what README §8 already claims ("Body already enables tnum").
+     It wasn't set, so tabular figures only applied via the opt-in .tabular class. */
+  font-feature-settings: "ss01", "cv11", "tnum";
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Display utilities ---------- */
@@ -133,6 +140,15 @@ body {
   font-family: var(--font-display), ui-serif, Georgia, serif;
   font-style: italic;
   font-weight: 400;
+}
+
+/* Shared focus treatment (README §8: a 1px accent hairline + 2px offset, never
+   a color-named Tailwind ring). Use `.focus-hairline` on interactive elements.
+   No border-radius here: the outline follows each element's own radius, and
+   setting one would reshape rounded elements while they hold focus. */
+.focus-hairline:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .tabular {

@@ -55,7 +55,7 @@ export default async function RecordsPage() {
           <SectionHeader
             kicker={`${seasonsCount} ${seasonsCount === 1 ? "season" : "seasons"} on the books`}
             title="All-Time Records"
-            description="Every weekly high, every blowout, every receipt across the league's history."
+            description={`Every weekly high, every blowout, every receipt across the league's history. ${allTime.scopeNote}`}
             size="lg"
           />
         </div>

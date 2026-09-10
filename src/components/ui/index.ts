@@ -1,4 +1,4 @@
-export { Card, CardHeader, CardTitle, CardDescription } from "./Card";
+export { Card } from "./Card";
 export { StatTile } from "./StatTile";
 export { ManagerAvatar } from "./ManagerAvatar";
 export { ScoreCell } from "./ScoreCell";
@@ -16,6 +16,7 @@ export type { ScatterPoint } from "./ScatterPlot";
 export { StackedBar } from "./StackedBar";
 export type { StackedBarSegment } from "./StackedBar";
 export { PlayerImage } from "./PlayerImage";
+export { RankRing } from "./RankRing";
 export { AwardsPodium } from "./AwardsPodium";
 export type { PodiumStep } from "./AwardsPodium";
 export { BracketView } from "./BracketView";

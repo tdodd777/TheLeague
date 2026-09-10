@@ -10,6 +10,14 @@ interface Props {
   index: CommandItem[];
 }
 
+/**
+ * Window event that opens the palette from anywhere in the client tree.
+ * MobileNav dispatches it so touch users below `lg` — who have neither the
+ * desktop trigger nor a keyboard for Cmd+K / `/` — still have a way in,
+ * without the layout having to thread a callback through both components.
+ */
+export const OPEN_COMMAND_PALETTE_EVENT = "league:open-command-palette";
+
 // Dialog body is loaded only when the user actually opens the palette. Keeps
 // the fuzzy-match + dialog markup out of the initial layout chunk shipped on
 // every page.
@@ -48,12 +56,27 @@ export function CommandPaletteRoot({ index }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  useEffect(() => {
+    function onOpen(): void {
+      setOpen(true);
+    }
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen);
+  }, []);
+
   return (
     <>
+      {/* The nav collapses to the hamburger below `lg`, so this trigger is
+          `display:none` on every phone and on tablets in portrait — those
+          surfaces reach the palette through MobileNav's Search row instead.
+          Sizing therefore only matters from `lg` up: `lg:h-11` holds a 44px
+          target across 1024-1279px (iPad Pro 12.9" portrait is exactly
+          1024px and is a touch surface), and `xl:h-8` restores the compact
+          desktop height where a pointer is the realistic input. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden md:inline-flex items-center gap-2 h-8 px-2.5 rounded-md border border-border text-xs text-foreground-subtle hover:text-foreground hover:border-border-strong transition-colors"
+        className="hidden lg:inline-flex items-center gap-2 lg:h-11 xl:h-8 px-2.5 rounded-md border border-border text-xs text-foreground-subtle hover:text-foreground hover:border-border-strong transition-colors focus-hairline"
         aria-label="Search"
       >
         <span>Search</span>

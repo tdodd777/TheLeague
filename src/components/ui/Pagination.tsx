@@ -95,7 +95,7 @@ function PageLink({
   scroll?: boolean;
 }) {
   const className = cn(
-    "h-8 min-w-[2rem] px-2 inline-flex items-center justify-center rounded-md text-xs tabular border transition-colors",
+    "h-11 min-w-11 lg:h-8 lg:min-w-[2rem] px-2 inline-flex items-center justify-center rounded-md text-sm lg:text-xs tabular border transition-colors focus-hairline",
     current
       ? "bg-foreground/[0.06] border-border-strong text-foreground font-medium"
       : href

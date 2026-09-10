@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 
 import { RosterValueSection } from "@/components/rankings/RosterValueSection";
 import {
+  TeamOverviewCard,
+  type OverviewStripAsset,
+} from "@/components/rankings/TeamOverviewCard";
+import { TeamOverviewSwitcher } from "@/components/rankings/TeamOverviewSwitcher";
+import {
   Card,
   ExpandableRow,
   Kicker,
@@ -25,7 +30,13 @@ import {
   listCachedSeasons,
   readPlayers,
 } from "@/lib/data";
-import { buildDynastyRankings } from "@/lib/rankings";
+import {
+  buildDynastyRankings,
+  buildSeasonRankings,
+  buildTeamStrengths,
+  loadWeekStrength,
+  type TeamStrength,
+} from "@/lib/rankings";
 import type { SeasonRoster } from "@/lib/types";
 import type { SleeperPlayer } from "@/lib/sleeper";
 
@@ -57,19 +68,113 @@ export default async function ManagerProfilePage({ params }: PageProps) {
     dynasty && dynastyBreakdown
       ? dynasty.rosters.indexOf(dynastyBreakdown) + 1
       : null;
+  const strength =
+    dynasty && dynastyBreakdown
+      ? (buildTeamStrengths(dynasty.rosters).get(dynastyBreakdown.rosterId) ??
+        null)
+      : null;
 
-  // Build per-season weekly PF sparklines for the career strip.
+  // The same roster read two more ways: redraft value for this season alone,
+  // and the projected points of the lineup actually set for this NFL week.
+  const seasonRankings = currentRoster ? await buildSeasonRankings() : null;
+  const seasonBreakdown = seasonRankings
+    ? (seasonRankings.result.rosters.find(
+        (r) => r.manager.userId === manager.userId,
+      ) ?? null)
+    : null;
+  const seasonStrength =
+    seasonRankings && seasonBreakdown
+      ? (buildTeamStrengths(seasonRankings.result.rosters).get(
+          seasonBreakdown.rosterId,
+        ) ?? null)
+      : null;
+  const week = currentRoster ? await loadWeekStrength() : null;
+  const weekSource =
+    week && currentRoster
+      ? (week.sources.find(
+          (s) => s.rosterId === currentRoster.manager.rosterId,
+        ) ?? null)
+      : null;
+  const weekStrength =
+    week && weekSource
+      ? (buildTeamStrengths(week.sources).get(weekSource.rosterId) ?? null)
+      : null;
+
+  const overviewViews: Array<{
+    key: string;
+    label: string;
+    valueLabel: string;
+    starters: ReadonlyArray<{ asset: OverviewStripAsset }>;
+    strength: TeamStrength;
+    footnote: React.ReactNode;
+  }> = [];
+  if (dynasty && dynastyBreakdown && strength) {
+    overviewViews.push({
+      key: "dynasty",
+      label: "Dynasty",
+      valueLabel: "Dynasty value",
+      starters: dynastyBreakdown.starters,
+      strength,
+      footnote: (
+        <>
+          Each row ranks this roster against the other {strength.teamCount - 1}{" "}
+          teams at that group, on raw FantasyCalc dynasty values from the{" "}
+          {dynasty.snapshotDate} snapshot. Bar length is where the group sits
+          between the league&rsquo;s thinnest and deepest at that spot, so a
+          short bar means the rest of the league is ahead, not that the players
+          are worthless. Kicker and defense sit out: the snapshot prices
+          neither.
+        </>
+      ),
+    });
+  }
+  if (seasonRankings && seasonBreakdown && seasonStrength) {
+    overviewViews.push({
+      key: "season",
+      label: "Season",
+      valueLabel: "Season value",
+      starters: seasonBreakdown.starters,
+      strength: seasonStrength,
+      footnote: (
+        <>
+          The same rows valued on FantasyCalc redraft numbers from the{" "}
+          {seasonRankings.result.snapshotDate} snapshot: what each group is
+          worth for this season alone, age and future picks stripped out.
+          Picks sit out because they carry no redraft value; kicker and
+          defense because the snapshot prices neither.
+        </>
+      ),
+    });
+  }
+  if (week && weekSource && weekStrength) {
+    overviewViews.push({
+      key: "week",
+      label: `Week ${week.week}`,
+      valueLabel: `Week ${week.week} projected`,
+      starters: weekSource.starters,
+      strength: weekStrength,
+      footnote: (
+        <>
+          The lineup set for Week {week.week}, valued in Sleeper&rsquo;s
+          projected points and ranked against the other{" "}
+          {weekStrength.teamCount - 1} teams. DEPTH is everyone left on the
+          bench, IR, and taxi, so a stud sitting out shows up there. Kicker
+          and defense count toward the total but get no row.
+        </>
+      ),
+    });
+  }
+
+  // Build per-season weekly PF sparklines for the career strip. Regular season,
+  // so each sparkline covers the same weeks as the record printed under it.
   const seasons = await listCachedSeasons();
   const seasonSparks = new Map<string, number[]>();
-  const seasonFinishes = new Map<string, number | null>();
   for (const s of seasons) {
-    const wk = await getWeeklyPointsByRoster(s);
+    const wk = await getWeeklyPointsByRoster(s, { scope: "regular" });
     const standings = await getStandings(s);
     const row = standings.find((r) => r.manager.userId === manager.userId);
     if (row) {
       seasonSparks.set(s, wk.get(row.rosterId) ?? []);
-      const played = row.wins + row.losses + row.ties;
-      seasonFinishes.set(s, played === 0 ? null : standings.indexOf(row) + 1);
     }
   }
 
@@ -83,12 +188,14 @@ export default async function ManagerProfilePage({ params }: PageProps) {
   };
   const totalGames = totals.wins + totals.losses + totals.ties;
   const winPct = totalGames === 0 ? 0 : (totals.wins / totalGames) * 100;
+  // Finishes are true playoff placements from the bracket, not standings seeds.
   const finishes = career?.seasons
     .map((s) => s.finishRank)
     .filter((n): n is number => n !== null) ?? [];
   const avgFinish = finishes.length === 0
     ? null
     : finishes.reduce((a, b) => a + b, 0) / finishes.length;
+  const titles = career?.seasons.filter((s) => s.finishRank === 1) ?? [];
   const lineupIqPct =
     totals.ppts > 0 ? Math.min(100, (totals.pf / totals.ppts) * 100) : null;
   const seasonsPlayed = career?.seasons.filter(
@@ -180,11 +287,15 @@ export default async function ManagerProfilePage({ params }: PageProps) {
             subValue={`${(totalGames === 0 ? 0 : totals.pa / totalGames).toFixed(1)} avg`}
           />
           <StatTile
-            label="Avg Finish"
+            label="Avg Playoff Finish"
             value={avgFinish !== null ? avgFinish.toFixed(1) : "—"}
             accent="secondary"
             animate={false}
-            subValue={`${career?.seasons.length ?? 0} seasons`}
+            subValue={
+              finishes.length === 0
+                ? `${career?.seasons.length ?? 0} seasons`
+                : `${finishes.length} finished ${finishes.length === 1 ? "season" : "seasons"}${titles.length > 0 ? ` · ${titles.length} title${titles.length === 1 ? "" : "s"}` : ""}`
+            }
           />
           <StatTile
             label="Lineup IQ"
@@ -208,7 +319,8 @@ export default async function ManagerProfilePage({ params }: PageProps) {
           <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {career.seasons.map((s) => {
               const wk = seasonSparks.get(s.season) ?? [];
-              const finish = seasonFinishes.get(s.season) ?? null;
+              const finish = s.finishRank;
+              const seed = s.seedRank;
               return (
                 <Card key={s.season} variant="default" padding="md">
                   <ExpandableRow
@@ -222,7 +334,7 @@ export default async function ManagerProfilePage({ params }: PageProps) {
                               tone={finish === 1 ? "accent" : "neutral"}
                               size="sm"
                             >
-                              #{finish}
+                              {finish === 1 ? "Champion" : `Finish #${finish}`}
                             </Pill>
                           ) : (
                             <Pill tone="neutral" size="sm">—</Pill>
@@ -234,6 +346,7 @@ export default async function ManagerProfilePage({ params }: PageProps) {
                         </div>
                         <div className="text-xs text-foreground-muted tabular mt-1">
                           {s.pf.toFixed(0)} PF · {s.pa.toFixed(0)} PA
+                          {seed ? ` · seed #${seed}` : ""}
                         </div>
                         {wk.length >= 2 ? (
                           <div className="mt-3 -mx-1">
@@ -242,7 +355,6 @@ export default async function ManagerProfilePage({ params }: PageProps) {
                               width={240}
                               height={28}
                               stroke="var(--accent-primary)"
-                              fillGradient
                               className="text-accent w-full"
                               endDot={false}
                             />
@@ -260,6 +372,25 @@ export default async function ManagerProfilePage({ params }: PageProps) {
               );
             })}
           </div>
+        </section>
+      ) : null}
+
+      {/* TEAM OVERVIEW */}
+      {overviewViews.length > 0 ? (
+        <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 sm:mt-14">
+          <TeamOverviewSwitcher
+            views={overviewViews.map(({ key, label }) => ({ key, label }))}
+          >
+            {overviewViews.map((view) => (
+              <TeamOverviewCard
+                key={view.key}
+                starters={view.starters}
+                strength={view.strength}
+                valueLabel={view.valueLabel}
+                footnote={view.footnote}
+              />
+            ))}
+          </TeamOverviewSwitcher>
         </section>
       ) : null}
 

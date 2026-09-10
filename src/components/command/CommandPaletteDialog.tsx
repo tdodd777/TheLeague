@@ -174,20 +174,27 @@ export function CommandPaletteDialog({ coreIndex, onClose }: Props) {
       />
       <div className="relative w-full max-w-xl rounded-xl border border-border bg-surface-elevated shadow-2xl overflow-hidden">
         <div className="flex items-center gap-2 border-b border-border px-3 h-11">
-          <span className="text-foreground-subtle text-xs">⌘K</span>
+          <span className="hidden lg:inline text-foreground-subtle text-xs">⌘K</span>
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search managers, seasons, players…"
-            className="flex-1 bg-transparent border-0 outline-none text-sm text-foreground placeholder:text-foreground-subtle"
+            // iOS otherwise capitalises the first letter and offers
+            // autocorrect on usernames like "jsmith92".
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="go"
+            className="flex-1 bg-transparent border-0 outline-none text-base lg:text-sm text-foreground placeholder:text-foreground-subtle"
           />
           <button
             type="button"
             onClick={onClose}
-            className="text-xs text-foreground-subtle hover:text-foreground"
+            className="min-h-11 lg:min-h-0 px-2 text-xs text-foreground-subtle hover:text-foreground"
           >
-            Esc
+            <span className="lg:hidden">Close</span>
+            <span className="hidden lg:inline">Esc</span>
           </button>
         </div>
         <ul
@@ -231,7 +238,7 @@ export function CommandPaletteDialog({ coreIndex, onClose }: Props) {
             ))
           )}
         </ul>
-        <div className="border-t border-border px-3 py-2 flex items-center gap-3 text-[10px] text-foreground-subtle">
+        <div className="hidden lg:flex border-t border-border px-3 py-2 items-center gap-3 text-[10px] text-foreground-subtle">
           <span>↑↓ navigate</span>
           <span>↵ open</span>
           <span>esc close</span>

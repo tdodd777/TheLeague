@@ -5,7 +5,6 @@ interface SparklineProps {
   width?: number;
   height?: number;
   stroke?: string;
-  fillGradient?: boolean;
   className?: string;
   ariaLabel?: string;
   /** Render the last value as a small dot at the end of the line. */
@@ -39,7 +38,6 @@ export function Sparkline({
   width = 80,
   height = 24,
   stroke,
-  fillGradient = false,
   className,
   ariaLabel,
   endDot = true,
@@ -80,10 +78,7 @@ export function Sparkline({
     )
     .join(" ");
 
-  const areaPath = `${path} L ${width.toFixed(2)} ${height.toFixed(2)} L 0 ${height.toFixed(2)} Z`;
   const lastPoint = points[points.length - 1];
-
-  const gradId = `sparkline-grad-${values.length}-${values[0]}-${values[values.length - 1]}`;
 
   return (
     <svg
@@ -95,17 +90,6 @@ export function Sparkline({
       role="img"
       aria-label={ariaLabel ?? "sparkline"}
     >
-      {fillGradient ? (
-        <defs>
-          <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={resolvedStroke} stopOpacity={0.28} />
-            <stop offset="100%" stopColor={resolvedStroke} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-      ) : null}
-      {fillGradient ? (
-        <path d={areaPath} fill={`url(#${gradId})`} />
-      ) : null}
       <path
         d={path}
         fill="none"

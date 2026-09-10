@@ -1,8 +1,8 @@
-// Minimal service worker.
+// The League — minimal service worker.
 // Strategy: cache-first for the app shell; network-first for HTML, fall back
 // to cache when offline; pass-through for anything else.
 
-const VERSION = "league-2026-v4";
+const VERSION = "league-2026-v6";
 const SHELL = [
   "/",
   "/standings",

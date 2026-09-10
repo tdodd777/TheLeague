@@ -27,3 +27,14 @@ export interface ManagerOverride {
 }
 
 export const managerOverrides: Record<string, ManagerOverride> = {};
+
+/**
+ * Managers to pin to the trailing edge of the head-to-head matrix (rightmost
+ * column and bottommost row). Each entry is matched case-insensitively against
+ * a manager's Sleeper username or team name, so it survives handle changes.
+ *
+ * Useful when someone joined recently and their row is mostly empty: pinning
+ * them last keeps the dense, interesting part of the grid in the top left.
+ * Leave this empty to keep Sleeper's own ordering.
+ */
+export const trailingManagers: string[] = [];

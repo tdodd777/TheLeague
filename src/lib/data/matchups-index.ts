@@ -10,10 +10,11 @@ export interface SeasonWeeks {
 
 /**
  * For each cached season, returns the sorted list of weeks that have been
- * played — a `matchups-NN.json` file on disk with at least one non-zero
- * score (see `readMatchups`). Future-week schedule stubs are excluded so
- * `generateStaticParams`, the week nav, and the `/matchups` redirect never
- * land on a 0–0 scoreboard.
+ * played: a `matchups-NN.json` file on disk that `readMatchups` accepts (at
+ * least one scheduled roster with points). Sleeper's 0-point schedule stubs
+ * and ghost weeks with no pairings are excluded, so `generateStaticParams`,
+ * the week nav, the command palette, and the `/matchups` redirect never land
+ * on an empty scoreboard.
  */
 export async function listCachedMatchupWeeks(): Promise<SeasonWeeks[]> {
   const seasons = await listCachedSeasons();
@@ -35,8 +36,9 @@ export async function listCachedMatchupWeeks(): Promise<SeasonWeeks[]> {
 }
 
 /**
- * Most recent (season, week) with cached matchup data, or null if none exist.
- * Walks seasons newest-first; within a season, picks the highest week.
+ * Most recent (season, week) that has been played, or null if none exist.
+ * Seasons are newest-first, so in-season the current week wins as soon as
+ * anyone scores.
  */
 export async function latestCachedMatchupWeek(): Promise<{
   season: string;

@@ -35,7 +35,7 @@ export function ExpandableRow({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label={label ?? (open ? "Collapse details" : "Expand details")}
-        className="text-left w-full group flex items-center gap-2"
+        className="text-left w-full group flex min-h-11 items-center gap-2 focus-hairline"
       >
         <span className="flex-1 min-w-0">{trigger}</span>
         {showChevron ? (
@@ -51,7 +51,11 @@ export function ExpandableRow({
       </button>
       {/* CSS-only collapse: animating grid-template-rows from 0fr to 1fr is
           composited (no layout thrash). The inner min-h-0 + overflow-hidden
-          lets the row collapse without clipping the natural height. */}
+          lets the row collapse without clipping the natural height.
+          `inert` is required alongside `aria-hidden`: the collapsed content is
+          still in the DOM and still focusable, so without it a keyboard user
+          tabs into invisible links (12 per collapsed draft round) and axe
+          flags `aria-hidden-focus`. React 19 supports the attribute natively. */}
       <div
         className="grid transition-[grid-template-rows,opacity] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
         style={{
@@ -59,6 +63,7 @@ export function ExpandableRow({
           opacity: open ? 1 : 0,
         }}
         aria-hidden={!open}
+        inert={!open}
       >
         <div className="min-h-0 overflow-hidden">
           <div className="pt-2.5">{children}</div>

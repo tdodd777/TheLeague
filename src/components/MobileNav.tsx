@@ -1,25 +1,12 @@
 "use client";
 
-import { Menu, X } from "lucide-react";
+import { Menu, Search, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { isActiveNav } from "./nav-active";
-
-const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
-  { href: "/", label: "Home" },
-  { href: "/standings", label: "Standings" },
-  { href: "/managers", label: "Managers" },
-  { href: "/rankings/dynasty", label: "Rankings" },
-  { href: "/matchups", label: "Matchups" },
-  { href: "/h2h", label: "H2H" },
-  { href: "/records", label: "Records" },
-  { href: "/history", label: "History" },
-  { href: "/awards", label: "Awards" },
-  { href: "/transactions", label: "Transactions" },
-  { href: "/drafts", label: "Drafts" },
-];
+import { OPEN_COMMAND_PALETTE_EVENT } from "./command/CommandPaletteRoot";
+import { isActiveNav, NAV_LINKS } from "./nav-active";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
@@ -65,7 +52,7 @@ export function MobileNav() {
   }, [open]);
 
   return (
-    <div className="sm:hidden">
+    <div className="lg:hidden">
       <button
         ref={buttonRef}
         type="button"
@@ -73,9 +60,9 @@ export function MobileNav() {
         aria-label={open ? "Close navigation menu" : "Open navigation menu"}
         aria-expanded={open}
         aria-controls="mobile-nav-panel"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:border-border-strong transition-colors"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border text-foreground-muted hover:text-foreground hover:border-border-strong transition-colors"
       >
-        {open ? <X size={16} strokeWidth={1.75} /> : <Menu size={16} strokeWidth={1.75} />}
+        {open ? <X size={18} strokeWidth={1.75} /> : <Menu size={18} strokeWidth={1.75} />}
       </button>
 
       {open ? (
@@ -84,9 +71,27 @@ export function MobileNav() {
           ref={panelRef}
           role="dialog"
           aria-label="Navigation"
-          className="absolute left-0 right-0 top-full mt-px border-b border-border bg-background/95 backdrop-blur-md shadow-lg"
+          className="absolute left-0 right-0 top-full mt-px border-b border-border bg-background shadow-lg"
         >
           <ul className="mx-auto max-w-6xl px-4 py-3 flex flex-col">
+            {/* Search lives here, not in NAV_LINKS — it is an action, not a
+                route. The palette's other two entry points are Cmd+K and `/`,
+                and a phone has no keyboard, so without this row search is
+                unreachable on every touch device below `lg` (README §8:
+                every primary target must be reachable from the palette). */}
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT));
+                }}
+                className="w-full flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-foreground-muted hover:text-foreground hover:bg-foreground/5 transition-colors focus-hairline"
+              >
+                <Search size={16} strokeWidth={1.75} aria-hidden />
+                <span>Search</span>
+              </button>
+            </li>
             {NAV_LINKS.map((n) => {
               const active = isActiveNav(n.href, pathname);
               return (
@@ -97,8 +102,8 @@ export function MobileNav() {
                     aria-current={active ? "page" : undefined}
                     className={
                       active
-                        ? "block rounded-md px-3 py-2.5 text-sm font-medium text-foreground bg-foreground/[0.06]"
-                        : "block rounded-md px-3 py-2.5 text-sm text-foreground-muted hover:text-foreground hover:bg-foreground/5 transition-colors"
+                        ? "flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-foreground bg-foreground/[0.06]"
+                        : "flex min-h-11 items-center rounded-md px-3 text-sm text-foreground-muted hover:text-foreground hover:bg-foreground/5 transition-colors"
                     }
                   >
                     {n.label}

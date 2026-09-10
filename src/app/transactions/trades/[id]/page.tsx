@@ -24,12 +24,24 @@ import {
   buildPickAsset,
   buildPlayerAsset,
   getSnapshotClosestTo,
+  listSnapshotDates,
   resolveSnapshot,
   type ResolvedSnapshot,
 } from "@/lib/rankings";
 import type { ValuedAsset } from "@/lib/rankings";
 
 export const dynamic = "force-static";
+
+/**
+ * Only the transaction ids enumerated by generateStaticParams exist. Without
+ * this, Next leaves the route open to on-demand rendering and this segment's
+ * pattern (`/transactions/trades/<anything>`) swallows every unmatched child of
+ * /transactions/trades — including the bare parent path /transactions/trades/page
+ * left over from truncating /transactions/trades/page/3, which crawlers walk by
+ * default. That miss booted a serverless render dragging the ~22MB data trace
+ * (18.7MB of it players.json) just to answer 404. Now those 404 statically.
+ */
+export const dynamicParams = false;
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -63,6 +75,15 @@ export default async function TradeDetailPage({ params }: PageProps) {
   const players = await readPlayers();
   const { date: snapshotDate, snapshot } = await getSnapshotClosestTo(
     trade.statusUpdated,
+  );
+  // The snapshot history is thin, so for older trades the "closest" snapshot
+  // can postdate the trade by years. Say so instead of implying these were the
+  // values on trade day.
+  const snapshotDates = await listSnapshotDates();
+  const snapshotNote = describeSnapshotUse(
+    snapshotDate,
+    trade.statusUpdated,
+    snapshotDates[0] ?? snapshotDate,
   );
   // Dynasty values are the right unit for a trade involving picks. Redraft
   // wouldn't price future-year picks at all.
@@ -108,9 +129,9 @@ export default async function TradeDetailPage({ params }: PageProps) {
             title="Trade Detail"
             description={
               <>
-                Valued against the FantasyCalc dynasty snapshot from{" "}
+                {snapshotNote.prefix}
                 <span className="text-foreground-muted tabular">{snapshotDate}</span>
-                {" — the closest-in-time snapshot to this trade."}
+                {snapshotNote.suffix}
               </>
             }
             size="lg"
@@ -174,7 +195,7 @@ export default async function TradeDetailPage({ params }: PageProps) {
                 </span>
               </>
             ) : (
-              <span>Multi-team deal — values shown per side.</span>
+              <span>Multi-team deal. Values shown per side.</span>
             )}
           </div>
         </Card>
@@ -230,6 +251,7 @@ export default async function TradeDetailPage({ params }: PageProps) {
             <span>
               <span className="block text-foreground-muted">Snapshot used</span>
               {snapshotDate}
+              <span className="block">{snapshotNote.relation}</span>
             </span>
           </div>
         </Card>
@@ -407,6 +429,72 @@ function SideCard({
       </ul>
     </Card>
   );
+}
+
+const DAY_MS = 86_400_000;
+/** Within this many days of the trade, the snapshot is close enough to call contemporaneous. */
+const NEAR_DAYS = 14;
+
+interface SnapshotNote {
+  /** Sentence opener, ends right before the snapshot date. */
+  prefix: string;
+  /** Continues after the snapshot date and closes the sentence. */
+  suffix: string;
+  /** Short phrase for the raw metadata block. */
+  relation: string;
+}
+
+/**
+ * Say plainly which snapshot priced the trade. There is currently one snapshot
+ * in the history, so every trade older than a couple of weeks is valued with a
+ * snapshot taken well after the fact. Claiming "values at the time of the
+ * trade" would be false, so the copy names the snapshot and the gap.
+ */
+function describeSnapshotUse(
+  snapshotDate: string,
+  tradeMs: number,
+  earliestDate: string,
+): SnapshotNote {
+  const snapshotMs = Date.parse(`${snapshotDate}T00:00:00Z`);
+  if (!Number.isFinite(snapshotMs)) {
+    return {
+      prefix: "Valued against the FantasyCalc dynasty snapshot from ",
+      suffix: ".",
+      relation: "",
+    };
+  }
+  const gapDays = Math.round((snapshotMs - tradeMs) / DAY_MS);
+  if (Math.abs(gapDays) <= NEAR_DAYS) {
+    return {
+      prefix: "Valued against the FantasyCalc dynasty snapshot from ",
+      suffix: ", the nearest snapshot in time to this trade.",
+      relation: "nearest in time",
+    };
+  }
+  const gap = formatGap(Math.abs(gapDays));
+  if (gapDays > 0) {
+    return {
+      prefix:
+        snapshotDate === earliestDate
+          ? "Valued using the earliest available FantasyCalc dynasty snapshot ("
+          : "Valued using the closest FantasyCalc dynasty snapshot we have (",
+      suffix: `), taken ${gap} after this trade. These are not the values as they stood on trade day.`,
+      relation: `taken ${gap} after the trade`,
+    };
+  }
+  return {
+    prefix: "Valued using the closest FantasyCalc dynasty snapshot we have (",
+    suffix: `), taken ${gap} before this trade. These are not the values as they stood on trade day.`,
+    relation: `taken ${gap} before the trade`,
+  };
+}
+
+function formatGap(days: number): string {
+  if (days < 45) return `${days} day${days === 1 ? "" : "s"}`;
+  const months = Math.round(days / 30.44);
+  if (months < 18) return `about ${months} month${months === 1 ? "" : "s"}`;
+  const years = Math.round((days / 365.25) * 10) / 10;
+  return `about ${years} year${years === 1 ? "" : "s"}`;
 }
 
 function formatDate(ms: number): string {

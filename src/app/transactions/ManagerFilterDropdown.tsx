@@ -45,7 +45,7 @@ export function ManagerFilterDropdown({ options, selected, type }: Props) {
               router.replace(buildHref(type, next), { scroll: false });
             });
           }}
-          className="rounded-md border border-border bg-surface text-xs text-foreground px-2 py-1 focus:outline-none focus:border-border-strong"
+          className="min-h-11 lg:min-h-0 rounded-md border border-border bg-surface text-sm lg:text-xs text-foreground px-2 lg:py-1 focus-hairline"
         >
           <option value="">All managers</option>
           {options.map((o) => (

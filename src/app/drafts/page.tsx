@@ -13,14 +13,20 @@ export const metadata = {
 };
 
 /**
- * Surfaces the most recent completed rookie draft as the canonical Drafts
- * landing — no drill-in required. Older drafts remain reachable via the
- * year pills on the year page. If no completed draft exists yet, render
- * an empty state in place rather than redirecting nowhere.
+ * Surfaces the most relevant rookie draft as the canonical Drafts landing —
+ * no drill-in required. A draft the last ingest caught mid-run wins outright;
+ * otherwise the most recent completed draft, and failing that any upcoming
+ * one (whose page shows the projected order and hosts the live room). Older
+ * drafts remain reachable via the year pills on the year page. If no draft
+ * exists at all, render an empty state in place rather than redirecting
+ * nowhere.
  */
 export default async function DraftsIndexPage() {
   const summaries = await getDraftSummaries();
-  const latest = summaries.find((s) => s.status === "complete");
+  const latest =
+    summaries.find((s) => s.status === "drafting" || s.status === "paused") ??
+    summaries.find((s) => s.status === "complete") ??
+    summaries[0];
 
   if (latest) {
     redirect(`/drafts/${latest.season}`);

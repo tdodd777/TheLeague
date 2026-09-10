@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { LiveDraftRoom } from "@/components/live/LiveDraftRoom";
 import {
   Card,
   EmptyState,
@@ -61,21 +62,43 @@ export default async function DraftYearPage({ params }: PageProps) {
   );
 
   const recap = await getDraftRecap(year);
+
+  // The static build only knows the draft's status as of the last ingest. On
+  // the latest year, while that cached status is anything short of complete,
+  // mount the live room: it polls Sleeper from the browser and takes over the
+  // moment picks start landing, hours before the next rebuild.
+  const liveRoom =
+    isLatest && recap && recap.draft.status !== "complete" ? (
+      <LiveDraftRoom
+        draftId={recap.draft.draft_id}
+        season={year}
+        managers={recap.managers.list}
+      />
+    ) : null;
+
   if (!recap || recap.picks.length === 0) {
     return (
       <main className="mx-auto max-w-6xl px-4 sm:px-6 py-16">
         <SectionHeader
-          kicker={`${year} draft · ${recap?.draft.status ?? "no data"}`}
+          kicker={`${year} draft · ${recap?.draft.status.replace("_", " ") ?? "no data"}`}
           title={`${year} Draft`}
           description="No completed picks to display yet."
           size="lg"
         />
-        <div className="mt-8">
-          <EmptyState
-            title="Draft not played"
-            description="Once picks are made, the board and retroactive analysis will populate here."
-          />
-        </div>
+        {liveRoom}
+        {/* The pre-draft page is exactly where the upcoming order matters
+            most. Without this the section rendered nowhere: this path
+            returned before reaching it, and past years are never isLatest. */}
+        {upcoming ? (
+          <UpcomingDraftSection preview={upcoming} />
+        ) : (
+          <div className="mt-8">
+            <EmptyState
+              title="Draft not played"
+              description="Once picks are made, the board and retroactive analysis will populate here."
+            />
+          </div>
+        )}
       </main>
     );
   }
@@ -88,7 +111,7 @@ export default async function DraftYearPage({ params }: PageProps) {
   const top = [...recap.picks].sort((a, b) => b.currentValue - a.currentValue)[0];
 
   return (
-    <main className="relative">
+    <main className="relative flex flex-col">
       <section className="relative overflow-hidden border-b border-border">
         <div className="relative mx-auto max-w-6xl px-4 sm:px-6 pt-10 pb-10 sm:pt-14 sm:pb-12">
           <SectionHeader
@@ -111,8 +134,8 @@ export default async function DraftYearPage({ params }: PageProps) {
                     href={`/drafts/${s}`}
                     className={
                       s === year
-                        ? "px-3 py-1 rounded-md bg-foreground/[0.06] text-foreground text-xs font-medium tabular"
-                        : "px-3 py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-xs tabular transition-colors"
+                        ? "inline-flex min-h-11 lg:min-h-0 items-center px-3 lg:py-1 rounded-md bg-foreground/[0.06] text-foreground text-sm lg:text-xs font-medium tabular focus-hairline"
+                        : "inline-flex min-h-11 lg:min-h-0 items-center px-3 lg:py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-sm lg:text-xs tabular transition-colors focus-hairline"
                     }
                   >
                     {s}
@@ -124,8 +147,14 @@ export default async function DraftYearPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* League-archive overview — context for the merged drafts page. */}
-      <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-8 sm:mt-10 flex flex-col gap-3">
+      {/* Cache caught the draft mid-run (status short of complete with some
+          picks in): the live room keeps the board current from here. */}
+      {liveRoom}
+
+      {/* League-archive overview — context for the merged drafts page. On a
+          phone it sits *after* the draft itself: it's all-time context, and
+          leading with it pushed the first pick more than two screens down. */}
+      <section className="order-last lg:order-none mx-auto max-w-6xl px-4 sm:px-6 mt-8 sm:mt-10 flex flex-col gap-3">
         <Kicker>League archive</Kicker>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <StatTile
@@ -218,14 +247,15 @@ export default async function DraftYearPage({ params }: PageProps) {
         </section>
       ) : null}
 
-      {/* DRAFT BOARD — desktop grid */}
-      <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 sm:mt-14 flex flex-col gap-4 hidden sm:flex">
+      {/* DRAFT BOARD — desktop grid. Board columns have a 180px minimum, so it
+          stays above `lg` rather than taking over at 640px. */}
+      <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 sm:mt-14 flex-col gap-4 hidden lg:flex">
         <Kicker>Pick-By-Pick Board</Kicker>
         <DraftBoard recap={recap} />
       </section>
 
-      {/* DRAFT BY TEAM — mobile accordion */}
-      <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 flex flex-col gap-3 sm:hidden">
+      {/* DRAFT BY TEAM — canonical phone/tablet view */}
+      <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 flex flex-col gap-3 lg:hidden">
         <Kicker>By Team</Kicker>
         <DraftByTeam recap={recap} />
       </section>
@@ -531,17 +561,59 @@ function DraftByTeam({ recap }: { recap: DraftRecap }) {
 function UpcomingDraftSection({ preview }: { preview: UpcomingDraftPreview }) {
   return (
     <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-8 flex flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-baseline lg:justify-between gap-1 lg:gap-3">
         <Kicker>Upcoming · {preview.season}</Kicker>
-        {preview.basisSeason ? (
-          <span className="text-[11px] tabular text-foreground-subtle">
-            Order projected from reversed {preview.basisSeason} standings ·{" "}
-            {preview.totalTradedPicks} picks traded
-          </span>
-        ) : null}
+        {/* Provenance matters here: a Sleeper-published order is the league's
+            real order, a derived one is our guess. `orderNote` says which. */}
+        <span className="text-[11px] tabular text-foreground-subtle">
+          {preview.orderNote} · {preview.totalTradedPicks} picks traded
+        </span>
       </div>
       <Card variant="default" padding="lg">
-        <div className="overflow-x-auto">
+        {/* Phone/tablet: one card row per slot, grouped by round. The table
+            needs a column per round, so on a phone reading the order meant
+            panning sideways through what is fundamentally a numbered list.
+            Round 1 is open by default; later rounds are one tap away. */}
+        <div className="lg:hidden flex flex-col">
+          {preview.rounds.map((round) => {
+            const traded = round.slots.filter((s) => s.traded).length;
+            return (
+              <div
+                key={round.round}
+                className="border-b border-rule last:border-b-0 py-1 first:pt-0 last:pb-0"
+              >
+                <ExpandableRow
+                  defaultOpen={round.round === 1}
+                  label={`Show round ${round.round} order`}
+                  trigger={
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-display italic text-[17px] text-foreground leading-tight">
+                        Round {round.round}
+                      </span>
+                      <span className="text-[11px] tabular text-foreground-subtle">
+                        {round.slots.length} picks
+                        {traded > 0 ? ` · ${traded} traded` : ""}
+                      </span>
+                    </div>
+                  }
+                >
+                  <ul className="flex flex-col border-t border-rule">
+                    {round.slots.map((slot) => (
+                      <li
+                        key={slot.slot}
+                        className="border-b border-rule last:border-b-0"
+                      >
+                        <UpcomingPickRow round={round.round} slot={slot} />
+                      </li>
+                    ))}
+                  </ul>
+                </ExpandableRow>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-rule">
@@ -586,10 +658,55 @@ function UpcomingDraftSection({ preview }: { preview: UpcomingDraftPreview }) {
   );
 }
 
+type UpcomingSlot = UpcomingDraftPreview["rounds"][number]["slots"][number];
+
+function UpcomingPickRow({
+  round,
+  slot,
+}: {
+  round: number;
+  slot: UpcomingSlot;
+}) {
+  const pickLabel = `${round}.${String(slot.slot).padStart(2, "0")}`;
+  if (!slot.manager) {
+    return (
+      <span className="flex min-h-11 items-center gap-3 py-2 opacity-60">
+        <span className="w-9 shrink-0 tabular text-[11px] text-foreground-subtle">
+          {pickLabel}
+        </span>
+        <span className="text-[13px] text-foreground-subtle">
+          Owner not set
+        </span>
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={`/managers/${slot.manager.username}`}
+      className="flex min-h-11 items-center gap-3 py-2 hover:bg-row-hover transition-colors focus-hairline"
+    >
+      <span className="w-9 shrink-0 tabular text-[11px] text-foreground-subtle">
+        {pickLabel}
+      </span>
+      <ManagerAvatar manager={slot.manager} size={28} ring="subtle" />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate text-[13px] text-foreground">
+          @{slot.manager.username}
+        </span>
+        {slot.traded && slot.originalManager ? (
+          <Pill tone="warning" size="sm" className="self-start max-w-full">
+            via @{slot.originalManager.username}
+          </Pill>
+        ) : null}
+      </span>
+    </Link>
+  );
+}
+
 function UpcomingPickCell({
   slot,
 }: {
-  slot: UpcomingDraftPreview["rounds"][number]["slots"][number];
+  slot: UpcomingSlot;
 }) {
   if (!slot.manager) {
     return <span className="text-[11px] text-foreground-subtle">—</span>;

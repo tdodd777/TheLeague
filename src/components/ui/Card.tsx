@@ -1,12 +1,17 @@
 import { cn } from "@/lib/cn";
 
 /**
- * Card primitive — three roles per ARCHITECTURE.md §7:
+ * Card primitive — three roles per DESIGN.md:
  *
  * - `default` — genuine secondary blocks (Pulse trend cards, expandable detail).
  * - `interactive` — clickable card-as-link in rare contexts (kept rare).
  * - `row` — hairline-rule list item, no rounded corners, no padded shell, no
  *   surface fill. Optional `rowAccent` draws a 1px left rule via `--row-accent-{tone}`.
+ *
+ * The `elevated` variant was removed in P3 as dead code. The `CardHeader` /
+ * `CardTitle` / `CardDescription` subcomponents were removed for the same
+ * reason: nothing consumed them. Card headings are composed inline with
+ * `SectionHeader` or a display-italic heading.
  */
 
 type CardVariant = "default" | "interactive" | "row";
@@ -63,50 +68,5 @@ export function Card({
     >
       {children}
     </Component>
-  );
-}
-
-export function CardHeader({
-  className,
-  children,
-  ...rest
-}: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn("flex items-start justify-between gap-3 mb-4", className)}
-      {...rest}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function CardTitle({
-  className,
-  children,
-  ...rest
-}: React.HTMLAttributes<HTMLHeadingElement>) {
-  return (
-    <h2
-      className={cn(
-        "text-base font-medium tracking-tight text-foreground",
-        className,
-      )}
-      {...rest}
-    >
-      {children}
-    </h2>
-  );
-}
-
-export function CardDescription({
-  className,
-  children,
-  ...rest
-}: React.HTMLAttributes<HTMLParagraphElement>) {
-  return (
-    <p className={cn("text-sm text-foreground-muted", className)} {...rest}>
-      {children}
-    </p>
   );
 }

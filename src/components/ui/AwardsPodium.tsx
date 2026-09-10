@@ -24,9 +24,11 @@ const HEIGHTS: Record<PodiumStep["place"], string> = {
   3: "h-10 sm:h-16",
 };
 
+// Flat tints, not gradients (README §8 bans decorative gradients). Hierarchy
+// comes from tint strength and the ring, which is what the eye reads anyway.
 const ACCENT: Record<PodiumStep["place"], string> = {
-  1: "bg-gradient-to-t from-accent/20 to-accent/[0.04] ring-1 ring-inset ring-accent/40",
-  2: "bg-gradient-to-t from-accent-secondary/20 to-accent-secondary/[0.04] ring-1 ring-inset ring-accent-secondary/30",
+  1: "bg-accent/[0.12] ring-1 ring-inset ring-accent/40",
+  2: "bg-accent-secondary/[0.12] ring-1 ring-inset ring-accent-secondary/30",
   3: "bg-foreground/[0.04] ring-1 ring-inset ring-border",
 };
 
@@ -81,7 +83,9 @@ function PodiumStepNode({ step }: { step: PodiumStep }) {
             size={AVATAR_SIZE[place]}
             ring={RING[place]}
           />
-          <span className="font-display text-base sm:text-lg text-foreground leading-tight text-center truncate max-w-full">
+          {/* Wrap instead of truncating: podium steps are ~95px wide at 390px,
+              which reduced most team names to an ellipsis with no way to reveal. */}
+          <span className="font-display text-base sm:text-lg text-foreground leading-tight text-center break-words text-balance max-w-full">
             {manager.displayName}
           </span>
           <span className="text-[11px] text-foreground-subtle truncate max-w-full">

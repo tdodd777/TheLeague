@@ -12,7 +12,7 @@ interface NavLinksProps {
 export function NavLinks({ links }: NavLinksProps) {
   const pathname = usePathname();
   return (
-    <ul className="hidden sm:flex items-center gap-0.5 ml-2">
+    <ul className="hidden lg:flex items-center gap-0.5 ml-2">
       {links.map((n) => {
         const active = isActiveNav(n.href, pathname);
         return (

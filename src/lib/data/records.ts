@@ -4,12 +4,31 @@ import { listCachedSeasons, readMatchups } from "./cache";
 import { getSeasonPlacements } from "./brackets";
 import { getManagers } from "./managers";
 import { getStandings } from "./standings";
+import { getWeekBounds } from "./weekly";
+
+/** Which half of the season a game was played in. */
+export type GamePhase = "regular" | "playoff";
+
+/**
+ * Scope of the weekly and margin leaderboards, in plain language. Render it
+ * beside those boards: a week 16 score sitting in a list next to week 4 scores
+ * is otherwise indistinguishable from a regular-season week.
+ */
+export const RECORD_SCOPE_NOTE =
+  "Weekly highs, lows, and margins include playoff and consolation weeks. Win and loss streaks count regular season games only.";
+
+/** Short suffix for a single row, e.g. "wk 16 · playoffs". Empty for regular. */
+export function phaseLabel(phase: GamePhase): string {
+  return phase === "playoff" ? "playoffs" : "";
+}
 
 export interface WeekScoreRow {
   season: string;
   week: number;
   manager: Manager;
   points: number;
+  /** Regular season, or a playoff / consolation week. */
+  phase: GamePhase;
 }
 
 export interface MatchupMarginRow {
@@ -20,6 +39,8 @@ export interface MatchupMarginRow {
   winnerPoints: number;
   loserPoints: number;
   margin: number;
+  /** Regular season, or a playoff / consolation week. */
+  phase: GamePhase;
 }
 
 export interface SeasonScoreRow {
@@ -51,24 +72,36 @@ export interface ChampionRow {
 
 export interface SeasonRecords {
   season: string;
+  /** Includes playoff and consolation weeks. */
   topWeeks: WeekScoreRow[];
+  /** Includes playoff and consolation weeks. */
   bottomWeeks: WeekScoreRow[];
+  /** Includes playoff and consolation weeks. */
   biggestBlowouts: MatchupMarginRow[];
+  /** Includes playoff and consolation weeks. */
   closestGames: MatchupMarginRow[];
 }
 
 export interface AllTimeRecords {
+  /** Includes playoff and consolation weeks. */
   topWeeks: WeekScoreRow[];
+  /** Includes playoff and consolation weeks. */
   bottomWeeks: WeekScoreRow[];
+  /** Includes playoff and consolation weeks. */
   biggestBlowouts: MatchupMarginRow[];
+  /** Includes playoff and consolation weeks. */
   closestGames: MatchupMarginRow[];
   topSeasons: SeasonScoreRow[];
   bottomSeasons: SeasonScoreRow[];
+  /** Regular season games only. */
   longestWinStreak: StreakRow | null;
+  /** Regular season games only. */
   longestLossStreak: StreakRow | null;
   champions: ChampionRow[];
   /** Number of seasons that contributed games to the dataset. */
   seasonsCounted: string[];
+  /** `RECORD_SCOPE_NOTE`, carried so the page can render it without importing. */
+  scopeNote: string;
 }
 
 export interface AllRecords {
@@ -81,6 +114,12 @@ export interface AllRecords {
  *
  * Excludes weeks that didn't actually happen (matchups with both 0 points are
  * unplayed weeks) and seasons that haven't started (rosters with 0 W-L-T).
+ *
+ * Scope, deliberately split (see `RECORD_SCOPE_NOTE`):
+ * - weekly highs / lows and margins walk every stored week, playoffs included,
+ *   and each row carries its `phase` so the label can say so;
+ * - win and loss streaks count regular-season games only, since that is what a
+ *   streak means when it sits beside a W-L record.
  */
 export async function getRecords(): Promise<AllRecords> {
   const seasons = await listCachedSeasons();
@@ -145,16 +184,30 @@ export async function getRecords(): Promise<AllRecords> {
       }
     }
 
-    // Per-week scores + matchup margins.
+    // Per-week scores + matchup margins. Record-book scope: every stored week,
+    // playoffs included, bounded by what the league has actually finished.
+    const { lastWeek, regularSeasonEndWeek } = await getWeekBounds(
+      season,
+      "all",
+    );
     const seasonWeekScores: WeekScoreRow[] = [];
     const seasonMargins: MatchupMarginRow[] = [];
-    for (let week = 1; week <= 18; week += 1) {
+    for (let week = 1; week <= lastWeek; week += 1) {
+      const phase: GamePhase =
+        week > regularSeasonEndWeek ? "playoff" : "regular";
       const matchups = await readMatchups(season, week);
       if (!matchups) continue;
       // Group by matchup_id for margins.
       const byMatchup = new Map<number, typeof matchups>();
       for (const m of matchups) {
         if (m.points === 0) continue; // skip unplayed weeks
+        // Sleeper still reports rostered players' points in weeks the league
+        // itself did not play: NFL week 18 stores all twelve teams with real
+        // scores and `matchup_id: null`, and playoff byes do the same. Those
+        // are not games anyone played, so they must not reach the record book.
+        // Without this the all-time low board is mostly ghost weeks, stamped
+        // "playoffs" for teams that were eliminated.
+        if (m.matchup_id === null || m.matchup_id === undefined) continue;
         const arr = byMatchup.get(m.matchup_id) ?? [];
         arr.push(m);
         byMatchup.set(m.matchup_id, arr);
@@ -166,6 +219,7 @@ export async function getRecords(): Promise<AllRecords> {
             week,
             manager,
             points: m.points,
+            phase,
           });
         }
       }
@@ -190,12 +244,13 @@ export async function getRecords(): Promise<AllRecords> {
           winnerPoints,
           loserPoints,
           margin,
+          phase,
         });
 
-        // Streak tracking — only regular-season games. Sleeper marks playoff
-        // weeks the same way; conventionally we only count regular-season for
-        // win/loss streaks. Detect playoffs by week >= playoff_week_start.
-        // We'll filter with a per-season cap below.
+        // Streak tracking — regular-season games only. Sleeper stores playoff
+        // weeks in the same shape, so without this guard a bracket run would
+        // extend a streak that the standings never counted.
+        if (phase !== "regular") continue;
         const aResult: "W" | "L" | "T" =
           a.points > b.points ? "W" : a.points < b.points ? "L" : "T";
         const bResult: "W" | "L" | "T" =
@@ -361,6 +416,7 @@ export async function getRecords(): Promise<AllRecords> {
       longestLossStreak,
       champions,
       seasonsCounted: [...seasonsCounted].sort(),
+      scopeNote: RECORD_SCOPE_NOTE,
     },
     perSeason: seasonRecords,
   };

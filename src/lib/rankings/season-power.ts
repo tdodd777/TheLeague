@@ -1,10 +1,6 @@
 import type { Manager } from "@/lib/types";
 
-import {
-  LAST_N_WEEKS,
-  SEASON_POWER_VALUE_DIVISOR,
-  SEASON_POWER_WEIGHTS,
-} from "./constants";
+import { LAST_N_WEEKS, SEASON_POWER_WEIGHTS } from "./constants";
 import type { RosterValueBreakdown, SeasonPowerBreakdown } from "./types";
 
 export interface SeasonInputs {
@@ -22,6 +18,37 @@ export interface SeasonInputs {
   actualTies: number;
   /** Sleeper's potential points if every team had set the optimal lineup each week. */
   potentialPoints: number;
+}
+
+/**
+ * A season-power row plus the league-relative indices the composite is built
+ * from. Extends SeasonPowerBreakdown, so every existing consumer keeps working.
+ */
+export interface SeasonPowerRow extends SeasonPowerBreakdown {
+  /** optimal starter value / league mean optimal starter value. 1.0 = league mean. */
+  valueIndex: number;
+  /** allPlayPct / 0.5, so 1.0 = league mean. */
+  allPlayIndex: number;
+  /**
+   * True when the league mean optimal starter value is not a positive number,
+   * which means the value component could not be computed at all and the
+   * composite is not trustworthy. Show "ranking unavailable" rather than the
+   * score. Never silently treated as an index of 1.0.
+   */
+  rankingUnavailable: boolean;
+}
+
+/** Mean of the finite entries. Returns 0 when there is nothing to average. */
+function meanOf(values: readonly number[]): number {
+  let total = 0;
+  let count = 0;
+  for (const v of values) {
+    if (Number.isFinite(v)) {
+      total += v;
+      count += 1;
+    }
+  }
+  return count > 0 ? total / count : 0;
 }
 
 /**
@@ -63,57 +90,102 @@ export function computeAllPlayRecord(weeklyByRoster: Map<number, number[]>): Map
   return result;
 }
 
+/**
+ * Season power composite. Every component is a league-relative index centred on
+ * 1.0, so the 40/30/20/10 weights mean what they say:
+ *
+ *   valueIndex   = optimal starter value / league mean optimal starter value
+ *   ppgIndex     = ppg / league mean ppg
+ *   last3Index   = last-3 average / league mean over that same trailing window
+ *   allPlayIndex = all-play win pct / 0.5
+ *
+ *   score = 100 × Σ(weight × index) / Σ(active weights)
+ *
+ * A component is active only when it has data behind it, and the divisor is the
+ * sum of the active weights. That keeps the scale at ~100 for a league-average
+ * team whether it is pre-season (value only) or mid-season (all four).
+ */
 export function computeSeasonPower(
   inputs: readonly SeasonInputs[],
   weeklyByRoster: Map<number, number[]>,
-): SeasonPowerBreakdown[] {
+): SeasonPowerRow[] {
   const allPlay = computeAllPlayRecord(weeklyByRoster);
 
-  // League weekly mean: average of all per-roster per-week scores.
-  let weeklyTotal = 0;
-  let weeklyCount = 0;
+  // League weekly mean: average of all per-roster per-week scores. Also the
+  // league mean PPG, since every score in the pool is one roster-week.
+  const allWeekScores: number[] = [];
+  // Same, restricted to each roster's trailing window — the last3 component has
+  // to be indexed against the same window it measures, not the whole season.
+  const trailingWeekScores: number[] = [];
   for (const [, arr] of weeklyByRoster) {
-    for (const s of arr) {
-      if (Number.isFinite(s)) {
-        weeklyTotal += s;
-        weeklyCount += 1;
-      }
-    }
+    for (const s of arr) allWeekScores.push(s);
+    for (const s of arr.slice(-LAST_N_WEEKS)) trailingWeekScores.push(s);
   }
-  const leagueAvgWeek = weeklyCount > 0 ? weeklyTotal / weeklyCount : 0;
+  const leagueMeanPpg = meanOf(allWeekScores);
+  const leagueMeanLast3 = meanOf(trailingWeekScores);
 
-  const out: SeasonPowerBreakdown[] = [];
+  const leagueMeanOsv = meanOf(inputs.map((r) => r.seasonValue.starterValue));
+  const valueAvailable = leagueMeanOsv > 0;
+
+  const out: SeasonPowerRow[] = [];
   for (const r of inputs) {
     const wk = r.weekly;
     const games = wk.length;
     const ppg = games > 0 ? r.pointsFor / games : 0;
-    const ppgIndex = leagueAvgWeek > 0 && games > 0 ? ppg / leagueAvgWeek : 0;
 
     const lastN = wk.slice(-LAST_N_WEEKS);
-    const last3Avg =
-      lastN.length > 0 ? lastN.reduce((a, b) => a + b, 0) / lastN.length : 0;
-    const last3Index = leagueAvgWeek > 0 && lastN.length > 0 ? last3Avg / leagueAvgWeek : 0;
+    const last3Avg = meanOf(lastN);
 
     const ap = allPlay.get(r.rosterId) ?? { wins: 0, losses: 0, ties: 0 };
     const apTotal = ap.wins + ap.losses + ap.ties;
-    const allPlayPct = apTotal > 0 ? ap.wins / apTotal : 0;
+    // A tie is half a win, not a loss.
+    const allPlayPct = apTotal > 0 ? (ap.wins + 0.5 * ap.ties) / apTotal : 0;
 
-    const valueComponent =
-      (r.seasonValue.starterValue / SEASON_POWER_VALUE_DIVISOR) *
-      SEASON_POWER_WEIGHTS.optimalStarterValue;
-    const ppgComponent = ppgIndex * SEASON_POWER_WEIGHTS.ppgIndex;
-    const last3Component = last3Index * SEASON_POWER_WEIGHTS.last3;
-    const allPlayComponent = allPlayPct * SEASON_POWER_WEIGHTS.allPlay;
-    const total =
-      valueComponent + ppgComponent + last3Component + allPlayComponent;
+    const ppgAvailable = games > 0 && leagueMeanPpg > 0;
+    const last3Available = lastN.length > 0 && leagueMeanLast3 > 0;
+    const allPlayAvailable = apTotal > 0;
 
-    const expectedWins = allPlayPct * games;
+    const valueIndex = valueAvailable
+      ? r.seasonValue.starterValue / leagueMeanOsv
+      : 0;
+    const ppgIndex = ppgAvailable ? ppg / leagueMeanPpg : 0;
+    const last3Index = last3Available ? last3Avg / leagueMeanLast3 : 0;
+    const allPlayIndex = allPlayAvailable ? allPlayPct / 0.5 : 0;
+
+    let weighted = 0;
+    let activeWeight = 0;
+    if (valueAvailable) {
+      weighted += SEASON_POWER_WEIGHTS.optimalStarterValue * valueIndex;
+      activeWeight += SEASON_POWER_WEIGHTS.optimalStarterValue;
+    }
+    if (ppgAvailable) {
+      weighted += SEASON_POWER_WEIGHTS.ppgIndex * ppgIndex;
+      activeWeight += SEASON_POWER_WEIGHTS.ppgIndex;
+    }
+    if (last3Available) {
+      weighted += SEASON_POWER_WEIGHTS.last3 * last3Index;
+      activeWeight += SEASON_POWER_WEIGHTS.last3;
+    }
+    if (allPlayAvailable) {
+      weighted += SEASON_POWER_WEIGHTS.allPlay * allPlayIndex;
+      activeWeight += SEASON_POWER_WEIGHTS.allPlay;
+    }
+    const total = activeWeight > 0 ? (100 * weighted) / activeWeight : 0;
+
+    // Both halves of schedule luck must describe the same weeks. `actualWins`
+    // comes from Sleeper's live record, which counts the in-progress week the
+    // moment it is decided, while `games` counts only completed weeks. Scoring
+    // expected wins over the record's own game count keeps the league-wide sum
+    // at zero mid-week instead of drifting by a full week of wins.
+    const decidedGames = r.actualWins + r.actualLosses + r.actualTies;
+    const luckGames = decidedGames > 0 ? decidedGames : games;
+    const expectedWins = allPlayPct * luckGames;
     const scheduleLuck = r.actualWins - expectedWins;
 
-    // Weekly power: per-week PF / leagueAvgWeek. Hovers around 1.
+    // Weekly power: per-week PF / leagueMeanPpg. Hovers around 1.
     const weeklyPower =
-      leagueAvgWeek > 0
-        ? wk.map((s) => (Number.isFinite(s) ? s / leagueAvgWeek : 0))
+      leagueMeanPpg > 0
+        ? wk.map((s) => (Number.isFinite(s) ? s / leagueMeanPpg : 0))
         : wk.map(() => 0);
 
     const lineupIQ =
@@ -124,9 +196,11 @@ export function computeSeasonPower(
       manager: r.manager,
       seasonValue: r.seasonValue,
       optimalStarterValue: r.seasonValue.starterValue,
+      valueIndex,
       ppgIndex,
       last3Index,
       allPlayPct,
+      allPlayIndex,
       allPlayWins: ap.wins,
       allPlayLosses: ap.losses,
       actualWins: r.actualWins,
@@ -138,6 +212,7 @@ export function computeSeasonPower(
       weeklyPower,
       lineupIQ,
       total,
+      rankingUnavailable: !valueAvailable,
     });
   }
 

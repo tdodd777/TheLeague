@@ -14,6 +14,8 @@ import {
 import { LEAGUE_NAME } from "@/config/site";
 import { getAllTrades, type ResolvedTrade } from "@/lib/data";
 
+import { TRADES_PAGE_SIZE, tradesTotalPages } from "./pageSize";
+
 export const dynamic = "force-static";
 
 export const metadata = {
@@ -22,21 +24,35 @@ export const metadata = {
     "Every trade in league history, with one-click drill-in to historical fairness.",
 };
 
-const PAGE_SIZE = 10;
-
 interface PageProps {
-  searchParams: Promise<{ page?: string }>;
+  /**
+   * The index route resolves this to `{}` and renders page 1. The paged route
+   * at /transactions/trades/page/[page] renders this same component with an
+   * explicit page number, which is why the prop is optional.
+   *
+   * Pagination is path-based, not query-based: under `force-static` Next
+   * resolves searchParams to `{}` at build time, so `?page=N` silently served
+   * page 1 for every N.
+   */
+  params?: Promise<{ page?: string }>;
 }
 
-export default async function TradesPage({ searchParams }: PageProps) {
-  const sp = await searchParams;
-  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+/**
+ * Renders one page of the trade log.
+ *
+ * Next.js rejects any export from a `page` file outside its known set, so this
+ * component cannot be hoisted into a shared module without a third file. The
+ * index route owns the markup and the paged route delegates to it.
+ */
+export default async function TradesPage({ params }: PageProps) {
+  const requested = (await params)?.page;
+  const page = Math.max(1, Number.parseInt(requested ?? "1", 10) || 1);
 
   const trades = await getAllTrades();
-  const totalPages = Math.max(1, Math.ceil(trades.length / PAGE_SIZE));
+  const totalPages = tradesTotalPages(trades.length);
   const safePage = Math.min(page, totalPages);
-  const start = (safePage - 1) * PAGE_SIZE;
-  const window = trades.slice(start, start + PAGE_SIZE);
+  const start = (safePage - 1) * TRADES_PAGE_SIZE;
+  const window = trades.slice(start, start + TRADES_PAGE_SIZE);
 
   const seasons = new Set(trades.map((t) => t.season));
   const biggest = [...trades].sort((a, b) => b.assetCount - a.assetCount)[0];
@@ -109,7 +125,7 @@ export default async function TradesPage({ searchParams }: PageProps) {
           <Pagination
             page={safePage}
             totalPages={totalPages}
-            hrefFor={(p) => (p === 1 ? "/transactions/trades" : `/transactions/trades?page=${p}`)}
+            hrefFor={(p) => (p === 1 ? "/transactions/trades" : `/transactions/trades/page/${p}`)}
           />
         </div>
       </section>

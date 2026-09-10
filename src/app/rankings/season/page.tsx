@@ -48,11 +48,11 @@ export default async function SeasonRankingsPage() {
       <section className="relative overflow-hidden border-b border-border">
         <div className="relative mx-auto max-w-6xl px-4 sm:px-6 pt-10 pb-10 sm:pt-14 sm:pb-12">
           <SectionHeader
-            kicker={`${result.season} season · snapshot ${result.snapshotDate}${preSeason ? " · pre-draft, value-only" : ""}`}
+            kicker={`${result.season} season · snapshot ${result.snapshotDate}${preSeason ? " · before kickoff, value only" : ""}`}
             title="Season Power"
             description={
               preSeason
-                ? `Pre-draft for ${result.season}: power is built from optimal-redraft starting lineups only. Form components (PPG, last 3 weeks, all-play) kick in once games begin.`
+                ? `Nothing played yet in ${result.season}, so power is the optimal redraft starting lineup only. Points per game, last-three-weeks form, and all-play kick in once games begin.`
                 : "Composite of optimal redraft lineup, points-per-game vs league mean, last-three-weeks form, and all-play winning percentage."
             }
             size="lg"
@@ -69,6 +69,7 @@ export default async function SeasonRankingsPage() {
             { term: "Points per game vs. mean", def: "How far above or below the league average a roster is scoring." },
             { term: "Last-three form", def: "Weight on the most recent three games to catch hot/cold streaks." },
             { term: "All-play win %", def: "What your record would be if you played every team every week." },
+            { term: "K / DEF: not priced", def: "FantasyCalc carries no kicker or defense values, so those two starting slots are excluded from the lineup-value signal rather than counted as zero. Every roster starts the same two, so no ranking moves." },
           ]}
         />
       </section>
@@ -198,7 +199,6 @@ function SeasonRow({
               width={260}
               height={26}
               stroke="var(--accent-primary)"
-              fillGradient
               className="text-accent w-full"
             />
           ) : (

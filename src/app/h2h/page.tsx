@@ -7,7 +7,10 @@ import {
   SectionHeader,
   StatTile,
 } from "@/components/ui";
+import { trailingManagers } from "@/config/managers";
 import { buildH2HMatrix, type H2HCell } from "@/lib/data";
+
+import { H2HMobileList, type H2HMobileManager } from "./H2HMobileList";
 
 export const dynamic = "force-static";
 
@@ -29,18 +32,17 @@ function cellColor(pct: number | null): string {
   return "rgba(239,68,68,0.78)";
 }
 
-// Managers we want pinned to the trailing edge of the matrix (rightmost
-// column / bottommost row). Matches against username or display name,
-// case-insensitive, to survive Sleeper handle differences. Useful for
-// newcomers with mostly-empty rows.
-const TRAIL_NAME_MATCHERS = ["blakebehlen", "blake behlen"];
-
+// Managers pinned to the trailing edge of the matrix (rightmost column and
+// bottommost row). Configured per league in src/config/managers.ts, matched
+// against username or display name, case-insensitive, to survive Sleeper
+// handle differences. Useful for newcomers with mostly-empty rows.
 function isTrail(m: { username: string; displayName?: string }): boolean {
   const u = m.username.toLowerCase();
   const d = (m.displayName ?? "").toLowerCase();
-  return TRAIL_NAME_MATCHERS.some(
-    (n) => u === n.replace(/\s+/g, "") || u === n || d === n,
-  );
+  return trailingManagers.some((raw) => {
+    const n = raw.toLowerCase();
+    return u === n.replace(/\s+/g, "") || u === n || d === n;
+  });
 }
 
 function reorderTrailing<T extends { username: string; displayName?: string }>(
@@ -60,6 +62,31 @@ export default async function H2HPage() {
     for (const [, row] of matrix.cells) for (const [, cell] of row) g += cell.games;
     return g / 2; // each game is double-counted (A↔B, B↔A).
   })();
+
+  // Phone view: per-manager opponent lists, best record first. Unplayed pairs
+  // sort last so a newcomer's empty rows don't lead.
+  const mobileManagers: H2HMobileManager[] = managers.map((m) => ({
+    manager: m,
+    opponents: managers
+      .filter((o) => o.userId !== m.userId)
+      .map((o) => {
+        const cell = matrix.cells.get(m.userId)?.get(o.userId);
+        const games = cell?.games ?? 0;
+        return {
+          manager: o,
+          wins: cell?.wins ?? 0,
+          losses: cell?.losses ?? 0,
+          ties: cell?.ties ?? 0,
+          games,
+          pct: cell && games > 0 ? winPct(cell) : null,
+        };
+      })
+      .sort((a, b) => {
+        if (a.games === 0 && b.games === 0) return 0;
+        if (a.games === 0 || b.games === 0) return a.games === 0 ? 1 : -1;
+        return (b.pct ?? 0) - (a.pct ?? 0);
+      }),
+  }));
 
   // Find the most-played pair.
   let mostPlayed: { a: string; b: string; games: number } | null = null;
@@ -99,9 +126,9 @@ export default async function H2HPage() {
       <section className="relative overflow-hidden border-b border-border">
         <div className="relative mx-auto max-w-6xl px-4 sm:px-6 pt-10 pb-10 sm:pt-14 sm:pb-12">
           <SectionHeader
-            kicker={`${managers.length} managers · ${Math.round(totalGames)} regular-season meetings`}
+            kicker={`${managers.length} managers · ${Math.round(totalGames)} meetings`}
             title="Head to Head"
-            description="All-time records between every pair, across every cached season. Read across rows: that manager's record vs. every other column."
+            description="All-time records between every pair, across every cached season, playoffs included. Read across rows: that manager's record vs. every other column."
             size="lg"
           />
         </div>
@@ -134,7 +161,12 @@ export default async function H2HPage() {
 
       <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-8 sm:mt-10 flex flex-col gap-3">
         <Kicker>The Matrix</Kicker>
-        <Card variant="default" padding="none" className="overflow-x-auto">
+        <H2HMobileList managers={mobileManagers} />
+        <Card
+          variant="default"
+          padding="none"
+          className="hidden lg:block overflow-x-auto"
+        >
           <table className="w-full border-separate border-spacing-0 text-xs">
             <thead>
               <tr>
@@ -230,7 +262,8 @@ export default async function H2HPage() {
             </tbody>
           </table>
         </Card>
-        <p className="text-[11px] text-foreground-subtle">
+        {/* Legend for the matrix, which only exists from lg up. */}
+        <p className="hidden lg:block text-[11px] text-foreground-subtle">
           Cell color: green = winning record, red = losing record. Click a cell
           to drill into the per-week receipts.
         </p>

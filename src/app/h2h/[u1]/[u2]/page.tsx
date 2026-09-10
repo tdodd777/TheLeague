@@ -180,25 +180,25 @@ export default async function H2HRivalryPage({ params }: PageProps) {
           <div className="flex items-center gap-4 mb-4">
             <Link
               href="/h2h"
-              className="text-xs uppercase tracking-[0.18em] text-foreground-subtle hover:text-foreground transition-colors"
+              className="inline-flex min-h-11 lg:min-h-0 items-center text-xs uppercase tracking-[0.18em] text-foreground-subtle hover:text-foreground transition-colors focus-hairline"
             >
               ← all matchups
             </Link>
           </div>
           <SectionHeader
-            kicker={`Rivalry · ${total} meetings`}
+            kicker={`Rivalry · ${total} meetings · playoffs included`}
             title={
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <Link
                   href={`/managers/${a.manager.username}`}
-                  className="hover:text-accent transition-colors"
+                  className="inline-flex min-h-11 items-center hover:text-accent transition-colors focus-hairline"
                 >
                   {a.manager.displayName}
                 </Link>
                 <span className="text-foreground-subtle text-2xl">vs</span>
                 <Link
                   href={`/managers/${b.manager.username}`}
-                  className="hover:text-accent transition-colors"
+                  className="inline-flex min-h-11 items-center hover:text-accent transition-colors focus-hairline"
                 >
                   {b.manager.displayName}
                 </Link>
@@ -494,34 +494,46 @@ function LineupBoard({
           return (
             <li
               key={`${row.slot}-${i}`}
-              className={`grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-1.5 border-b border-border/40 last:border-b-0 ${
+              className={`border-b border-border/40 last:border-b-0 ${
                 isSwing ? "bg-accent-soft/20" : ""
               }`}
             >
-              <PlayerCell
-                spot={row.a}
-                align="right"
-                winner={aWon}
-                wonSlot={aWonSlot}
-              />
-              <span className="flex flex-col items-center gap-0.5 px-2 w-14 shrink-0">
-                <span
-                  className={`text-[10px] uppercase tracking-[0.16em] font-medium tabular ${isSwing ? "text-accent" : "text-foreground-subtle"}`}
-                >
-                  {row.slot}
-                </span>
-                {isSwing ? (
-                  <span className="text-[8px] uppercase tracking-[0.18em] text-accent font-medium leading-none">
-                    swing
+              {/*
+                One markup tree, two layouts — never two trees. Phone: slot
+                label on its own line, then one full-width row per team. The
+                mirrored three-column grid only has ~123px per side at 390px,
+                which left ~22px for the name and printed the score on top of
+                it. From `lg` the same three children become that mirrored
+                grid: the slot label drops its phone-only `order-first` and
+                lands back in the middle column, and the left-hand PlayerCell
+                mirrors itself with `lg:` modifiers.
+              */}
+              <div className="px-4 py-2 lg:py-1.5 flex flex-col gap-1 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-3">
+                <PlayerCell
+                  spot={row.a}
+                  mirrorAtLg
+                  winner={aWon}
+                  wonSlot={aWonSlot}
+                />
+                <span className="order-first lg:order-none flex items-center gap-2 lg:flex-col lg:gap-0.5 lg:px-2 lg:w-14 lg:shrink-0">
+                  <span
+                    className={`text-[10px] uppercase tracking-[0.16em] font-medium tabular ${isSwing ? "text-accent" : "text-foreground-subtle"}`}
+                  >
+                    {row.slot}
                   </span>
-                ) : null}
-              </span>
-              <PlayerCell
-                spot={row.b}
-                align="left"
-                winner={bWon}
-                wonSlot={bWonSlot}
-              />
+                  {isSwing ? (
+                    <span className="text-[10px] lg:text-[8px] uppercase tracking-[0.18em] text-accent font-medium leading-none">
+                      swing
+                    </span>
+                  ) : null}
+                </span>
+                <PlayerCell
+                  spot={row.b}
+                  mirrorAtLg={false}
+                  winner={bWon}
+                  wonSlot={bWonSlot}
+                />
+              </div>
             </li>
           );
         })}
@@ -616,15 +628,20 @@ function LineupBoard({
               const ba = lineupA.bench[i];
               const bb = lineupB.bench[i];
               return (
-                <li
-                  key={`bench-${i}`}
-                  className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-1 text-foreground-muted"
-                >
-                  <BenchCell spot={ba} align="right" />
-                  <span className="text-[9px] uppercase tracking-[0.16em] text-foreground-subtle px-2 text-center w-12">
-                    BN
-                  </span>
-                  <BenchCell spot={bb} align="left" />
+                <li key={`bench-${i}`} className="text-foreground-muted">
+                  {/*
+                    One tree, same technique as the starter rows: stacked on a
+                    phone, mirrored grid from `lg`. The "BN" marker is the only
+                    breakpoint-specific node — the phone layout has no room for
+                    it and it carries no data.
+                  */}
+                  <div className="px-4 py-1.5 lg:py-1 flex flex-col gap-1 border-b border-border/30 lg:border-b-0 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-3">
+                    <BenchCell spot={ba} mirrorAtLg />
+                    <span className="hidden lg:block text-[9px] uppercase tracking-[0.16em] text-foreground-subtle px-2 text-center w-12">
+                      BN
+                    </span>
+                    <BenchCell spot={bb} mirrorAtLg={false} />
+                  </div>
                 </li>
               );
             })}
@@ -637,7 +654,7 @@ function LineupBoard({
 
 function PlayerCell({
   spot,
-  align,
+  mirrorAtLg,
   winner,
   wonSlot,
 }: {
@@ -651,25 +668,29 @@ function PlayerCell({
         projection: number | null;
       }
     | null;
-  align: "left" | "right";
+  /**
+   * Left-aligned on a phone either way; the home side flips to the mirrored,
+   * right-aligned presentation from `lg`. This is a `lg:` modifier rather than
+   * a second copy of the row so the markup is emitted once.
+   */
+  mirrorAtLg: boolean;
   winner: boolean;
   wonSlot: boolean;
 }) {
   if (!spot) {
     return (
       <span
-        className={`text-xs text-foreground-subtle ${align === "right" ? "text-right" : "text-left"}`}
+        className={`text-xs text-foreground-subtle text-left ${mirrorAtLg ? "lg:text-right" : ""}`}
       >
         —
       </span>
     );
   }
-  const isRight = align === "right";
   const delta =
     spot.projection !== null ? spot.points - spot.projection : null;
   return (
     <div
-      className={`flex items-center gap-2 min-w-0 ${isRight ? "flex-row-reverse text-right" : ""}`}
+      className={`flex items-center gap-2 min-w-0 ${mirrorAtLg ? "lg:flex-row-reverse lg:text-right" : ""}`}
     >
       <PlayerImage
         playerId={spot.playerId}
@@ -679,7 +700,7 @@ function PlayerCell({
         fallbackColor={positionColor(spot.position)}
       />
       <span
-        className={`flex flex-col min-w-0 flex-1 ${isRight ? "items-end" : ""}`}
+        className={`flex flex-col min-w-0 flex-1 ${mirrorAtLg ? "lg:items-end" : ""}`}
       >
         <span
           className={`text-sm truncate ${winner ? "text-foreground" : "text-foreground-muted"}`}
@@ -691,7 +712,7 @@ function PlayerCell({
         </span>
       </span>
       <span
-        className={`flex flex-col shrink-0 w-14 tabular ${isRight ? "items-start text-left" : "items-end text-right"}`}
+        className={`flex flex-col shrink-0 w-14 tabular items-end text-right ${mirrorAtLg ? "lg:items-start lg:text-left" : ""}`}
       >
         <span
           className={`text-sm font-medium ${wonSlot ? "text-positive" : winner ? "text-foreground" : "text-foreground-muted"}`}
@@ -718,7 +739,7 @@ function PlayerCell({
 
 function BenchCell({
   spot,
-  align,
+  mirrorAtLg,
 }: {
   spot:
     | {
@@ -730,21 +751,21 @@ function BenchCell({
         projection: number | null;
       }
     | undefined;
-  align: "left" | "right";
+  /** See `PlayerCell` — mirroring is a `lg:` modifier, not a second tree. */
+  mirrorAtLg: boolean;
 }) {
   if (!spot) {
     return (
       <span
-        className={`text-[11px] text-foreground-subtle ${align === "right" ? "text-right" : "text-left"}`}
+        className={`text-[11px] text-foreground-subtle text-left ${mirrorAtLg ? "lg:text-right" : ""}`}
       >
         —
       </span>
     );
   }
-  const isRight = align === "right";
   return (
     <div
-      className={`flex items-center gap-2 min-w-0 ${isRight ? "flex-row-reverse text-right" : ""}`}
+      className={`flex items-center gap-2 min-w-0 ${mirrorAtLg ? "lg:flex-row-reverse lg:text-right" : ""}`}
     >
       <PlayerImage
         playerId={spot.playerId}
@@ -757,7 +778,7 @@ function BenchCell({
         {spot.name}
       </span>
       <span
-        className={`tabular text-[11px] shrink-0 w-10 ${isRight ? "text-left" : "text-right"}`}
+        className={`tabular text-[11px] shrink-0 w-10 text-right ${mirrorAtLg ? "lg:text-left" : ""}`}
       >
         {spot.points.toFixed(1)}
       </span>

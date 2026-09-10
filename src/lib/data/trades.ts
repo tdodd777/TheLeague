@@ -15,10 +15,65 @@ export interface TradePickAsset {
   season: string;
   /** Round number. */
   round: number;
-  /** roster_id of the original owner — its slot determines the pick value. */
+  /**
+   * roster_id of the original owner expressed in the pick's own draft season,
+   * carried forward by user_id. This is the id that lines up with that
+   * season's draft order, so it is the one to join on for pick value.
+   */
   originalRosterId: number;
-  /** Manager who originally owned the pick (from the season the pick fires in). */
+  /**
+   * roster_id exactly as the transaction recorded it. Scoped to the season the
+   * trade happened in, so it is only meaningful against that season's rosters.
+   */
+  originalRosterIdAtTrade: number;
+  /** Stable Sleeper user_id of the manager who owned the pick when it was traded. */
+  originalUserId: string | null;
+  /** Manager who owned the pick at the time of the trade. */
   originalManager: Manager | null;
+}
+
+export interface TradedPickOrigin {
+  /** Stable Sleeper user_id of the owner at transaction time. */
+  userId: string | null;
+  /** Manager who owned the pick when the transaction happened. */
+  manager: Manager | null;
+  /** roster_id as written in the transaction (scoped to the transaction's season). */
+  rosterIdAtTransaction: number;
+  /** The same manager's roster_id in the season the pick fires in. */
+  rosterIdInPickSeason: number;
+}
+
+/**
+ * Work out who a traded draft pick originally belonged to.
+ *
+ * Sleeper roster_ids are scoped to one season's league, so `pick.roster_id`
+ * only means anything against the rosters of the season the transaction
+ * happened in. Reading it against the pick's own season names whoever holds
+ * that number later, which can be a different person entirely: roster 2 can
+ * belong to one manager in 2025 and someone else in 2026.
+ *
+ * So resolve the owner in the transaction's own season, then carry that
+ * manager's stable user_id forward to find their roster_id in the season the
+ * pick fires in. Falls back to the raw roster_id when the pick's season is not
+ * cached yet or the manager has since left the league.
+ */
+export function resolvePickOrigin(
+  pick: SleeperTransactionDraftPick,
+  transactionSeasonManagers: ManagerLookup,
+  managersBySeason: Map<string, ManagerLookup>,
+): TradedPickOrigin {
+  const owner =
+    transactionSeasonManagers.byRosterId.get(pick.roster_id) ?? null;
+  const pickSeasonManagers = managersBySeason.get(pick.season);
+  const sameManagerLater = owner
+    ? pickSeasonManagers?.byUserId.get(owner.userId)
+    : undefined;
+  return {
+    userId: owner?.userId ?? null,
+    manager: owner,
+    rosterIdAtTransaction: pick.roster_id,
+    rosterIdInPickSeason: sameManagerLater?.rosterId ?? pick.roster_id,
+  };
 }
 
 export interface TradePlayerAsset {
@@ -74,8 +129,8 @@ interface ResolveOpts {
   season: string;
   managers: ManagerLookup;
   players: Record<string, SleeperPlayer>;
-  /** Manager lookups for the seasons in which traded picks fire (for "originally owned by"). */
-  futureSeasonManagers?: Map<string, ManagerLookup>;
+  /** Manager lookups per cached season, used to carry pick owners across seasons. */
+  managersBySeason: Map<string, ManagerLookup>;
 }
 
 function resolveOne(
@@ -118,16 +173,14 @@ function resolveOne(
   for (const pick of tx.draft_picks as SleeperTransactionDraftPick[]) {
     const side = sideByRoster.get(pick.owner_id);
     if (!side) continue;
-    const futureLookup = opts.futureSeasonManagers?.get(pick.season);
-    const originalManager =
-      futureLookup?.byRosterId.get(pick.roster_id) ??
-      opts.managers.byRosterId.get(pick.roster_id) ??
-      null;
+    const origin = resolvePickOrigin(pick, opts.managers, opts.managersBySeason);
     side.picks.push({
       season: pick.season,
       round: pick.round,
-      originalRosterId: pick.roster_id,
-      originalManager,
+      originalRosterId: origin.rosterIdInPickSeason,
+      originalRosterIdAtTrade: origin.rosterIdAtTransaction,
+      originalUserId: origin.userId,
+      originalManager: origin.manager,
     });
   }
 
@@ -162,13 +215,13 @@ function resolveOne(
 export async function getAllTrades(): Promise<ResolvedTrade[]> {
   const seasons = await listCachedSeasons();
   const players = await readPlayers();
-  const futureSeasonManagers = new Map<string, ManagerLookup>();
-  for (const s of seasons) futureSeasonManagers.set(s, await getManagers(s));
+  const managersBySeason = new Map<string, ManagerLookup>();
+  for (const s of seasons) managersBySeason.set(s, await getManagers(s));
 
   const out: ResolvedTrade[] = [];
   for (const season of seasons) {
     const txs = await readAllTransactions(season).catch(() => []);
-    const managers = futureSeasonManagers.get(season)!;
+    const managers = managersBySeason.get(season)!;
     for (const tx of txs) {
       if (tx.type !== "trade") continue;
       if (tx.status !== "complete") continue;
@@ -176,7 +229,7 @@ export async function getAllTrades(): Promise<ResolvedTrade[]> {
         season,
         managers,
         players,
-        futureSeasonManagers,
+        managersBySeason,
       });
       if (resolved) out.push(resolved);
     }

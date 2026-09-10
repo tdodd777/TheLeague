@@ -7,10 +7,10 @@ import {
   Sparkline,
 } from "@/components/ui";
 import { managerOverrides } from "@/config/managers";
-import { LEAGUE_TAGLINE } from "@/config/site";
 import {
   getCurrentLeague,
   getManagers,
+  getSeasonPlacements,
   getStandings,
   getWeeklyPointsByRoster,
   listCachedSeasons,
@@ -23,25 +23,43 @@ export default async function ManagersPage() {
 
   const recordSeason = seasons.find((s) => s !== season) ?? season;
   const standings = await getStandings(recordSeason);
-  const weekly = await getWeeklyPointsByRoster(recordSeason);
+  // Regular season, to match the W-L shown on each row.
+  const weekly = await getWeeklyPointsByRoster(recordSeason, {
+    scope: "regular",
+  });
+  // Where everyone actually finished, from the playoff bracket. Standings order
+  // is only the seed they entered the bracket on, so the two get shown apart.
+  const placements = await getSeasonPlacements(recordSeason).catch(() => null);
   const standingsByUser = new Map(
     standings.map((row) => [row.manager.userId, row] as const),
   );
-  const sortedManagers = [...managers.list].sort((a, b) => {
-    const aRow = standingsByUser.get(a.userId);
-    const bRow = standingsByUser.get(b.userId);
-    if (!aRow || !bRow) return 0;
-    return standings.indexOf(aRow) - standings.indexOf(bRow);
-  });
+  const seedOf = (userId: string): number | null => {
+    const row = standingsByUser.get(userId);
+    if (!row) return null;
+    if (row.wins + row.losses + row.ties === 0) return null;
+    return standings.indexOf(row) + 1;
+  };
+  const finishOf = (userId: string): number | null => {
+    const row = standingsByUser.get(userId);
+    if (!row || !placements) return null;
+    return placements.byRosterId.get(row.rosterId) ?? null;
+  };
+  // Sort on true finish. Anyone the bracket doesn't place falls back to their
+  // seed, and managers with no row at all sort last.
+  const sortKey = (userId: string): number =>
+    finishOf(userId) ?? seedOf(userId) ?? Number.MAX_SAFE_INTEGER;
+  const sortedManagers = [...managers.list].sort(
+    (a, b) => sortKey(a.userId) - sortKey(b.userId),
+  );
 
   return (
     <main className="relative">
       <section className="relative overflow-hidden border-b border-border">
         <div className="relative mx-auto max-w-6xl px-4 sm:px-6 pt-10 pb-10 sm:pt-14 sm:pb-12">
           <SectionHeader
-            kicker={`${managers.list.length} Owners · Sorted by ${recordSeason} finish`}
+            kicker={`${managers.list.length} Owners · Sorted by ${recordSeason} playoff finish`}
             title="The Managers"
-            description={LEAGUE_TAGLINE}
+            description="Twelve dynasty owners. Rosters, records, and receipts going back four seasons."
             size="lg"
           />
         </div>
@@ -51,7 +69,8 @@ export default async function ManagersPage() {
         <ol className="border-y border-rule">
           {sortedManagers.map((m, i) => {
             const last = standingsByUser.get(m.userId);
-            const finishRank = last ? standings.indexOf(last) + 1 : null;
+            const finishRank = finishOf(m.userId);
+            const seedRank = seedOf(m.userId);
             const wk = last ? (weekly.get(last.rosterId) ?? []) : [];
             const override = managerOverrides[m.userId];
             const ordinal = String(i + 1).padStart(2, "0");
@@ -84,7 +103,10 @@ export default async function ManagersPage() {
                         {last
                           ? ` · ${last.wins}-${last.losses}${last.ties ? `-${last.ties}` : ""}`
                           : ""}
-                        {finishRank ? ` · #${finishRank} ${recordSeason}` : ""}
+                        {finishRank
+                          ? ` · ${recordSeason} finish #${finishRank}`
+                          : ""}
+                        {seedRank ? ` · seed #${seedRank}` : ""}
                       </span>
                     </div>
                     {wk.length >= 2 ? (
@@ -94,7 +116,6 @@ export default async function ManagersPage() {
                           width={120}
                           height={24}
                           stroke="var(--accent-primary)"
-                          fillGradient
                           className="text-accent"
                           endDot={false}
                         />

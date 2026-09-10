@@ -134,7 +134,7 @@ function Row({
   return (
     <Link
       href={`/managers/${m.username}`}
-      className="flex items-center gap-3 group"
+      className="flex min-h-11 items-center gap-3 py-1 group focus-hairline"
     >
       <span className="block h-7 w-7 overflow-hidden rounded-full bg-foreground/5 shrink-0">
         <Image

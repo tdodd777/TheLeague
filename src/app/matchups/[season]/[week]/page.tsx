@@ -23,6 +23,8 @@ import type { RosterLineup } from "@/lib/data";
 import type { SleeperMatchup } from "@/lib/sleeper";
 import type { Manager } from "@/lib/types";
 
+import { WeekPillsScroller } from "./WeekPillsScroller";
+
 export const dynamic = "force-static";
 
 interface PageProps {
@@ -123,7 +125,7 @@ export default async function MatchupWeekPage({ params }: PageProps) {
           <div className="flex items-center gap-4 mb-4">
             <Link
               href="/matchups"
-              className="text-xs uppercase tracking-[0.18em] text-foreground-subtle hover:text-foreground transition-colors"
+              className="inline-flex min-h-11 lg:min-h-0 items-center text-xs uppercase tracking-[0.18em] text-foreground-subtle hover:text-foreground transition-colors focus-hairline"
             >
               ← all matchups
             </Link>
@@ -200,7 +202,7 @@ function WeekPills({
 }) {
   if (weeks.length === 0) return null;
   return (
-    <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-1 overflow-x-auto max-w-full">
+    <WeekPillsScroller>
       {weeks.map((w) => {
         const ww = String(w).padStart(2, "0");
         const isActive = w === active;
@@ -208,17 +210,18 @@ function WeekPills({
           <Link
             key={w}
             href={`/matchups/${season}/${ww}`}
+            aria-current={isActive ? "page" : undefined}
             className={
               isActive
-                ? "px-2.5 py-1 rounded-md bg-foreground/[0.06] font-display italic text-[15px] text-foreground shrink-0"
-                : "px-2.5 py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-[12px] tabular transition-colors shrink-0"
+                ? "inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 rounded-md bg-foreground/[0.06] font-display italic text-[15px] text-foreground shrink-0 focus-hairline"
+                : "inline-flex min-h-11 min-w-11 items-center justify-center px-2.5 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-[13px] tabular transition-colors shrink-0 focus-hairline"
             }
           >
             {w}
           </Link>
         );
       })}
-    </div>
+    </WeekPillsScroller>
   );
 }
 
@@ -239,69 +242,128 @@ function PairCard({ pair }: { pair: PairView }) {
       href={h2hHref}
       className="group rounded-xl border border-border bg-surface hover:border-border-strong hover:bg-foreground/[0.02] transition-colors overflow-hidden"
     >
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-3 border-b border-border">
-        <TeamHeader manager={pair.a.manager} winner={aWon || tied} align="right" />
-        <span className="text-[10px] uppercase tracking-[0.18em] text-foreground-subtle font-medium px-1">
-          vs
-        </span>
-        <TeamHeader manager={pair.b.manager} winner={!aWon || tied} align="left" />
-      </div>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-4">
-        <div className="flex justify-end">
+      {/*
+        One markup tree, two layouts — never two trees. A duplicated card ships
+        a second copy of both managers and both top scorers, and PlayerImage is
+        a client component, so each hidden copy is another instance to hydrate.
+
+        From `lg` the three inner divs are the grid rows they have always been —
+        manager / score / top scorer, mirrored around the middle column, with
+        their own padding, rules and column tracks untouched.
+
+        Below `lg` those rows collapse to `display: contents`, so their children
+        become items of the flat two-column stack declared here: one full-width
+        block per team (manager + score on a line, that team's top scorer under
+        it), split by the vs band. The mirrored grid leaves only ~145px a side
+        at 390px, which clipped team names and every top-player name.
+      */}
+      <div className="grid grid-cols-[1fr_auto] items-center gap-x-2 px-4 lg:block lg:px-0">
+        <div className="contents lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-2 lg:px-4 lg:py-3 lg:border-b lg:border-border">
+          <TeamHeader
+            manager={pair.a.manager}
+            winner={aWon || tied}
+            side="a"
+            padBottom={aTop === null}
+          />
+          <span className="hidden lg:block lg:col-start-2 text-[10px] uppercase tracking-[0.18em] text-foreground-subtle font-medium px-1">
+            vs
+          </span>
+          <TeamHeader
+            manager={pair.b.manager}
+            winner={!aWon || tied}
+            side="b"
+            padBottom={bTop === null}
+          />
+        </div>
+
+        <div className="contents lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-2 lg:px-4 lg:py-4">
           <ScoreCell
             value={pair.a.matchup.points}
             precision={2}
             emphasis={aWon || tied ? "primary" : "muted"}
-            className="font-display text-3xl"
+            className={`font-display text-2xl row-start-1 col-start-2 ${aTop === null ? "py-3" : "pt-3"} lg:py-0 lg:text-3xl lg:col-start-1 lg:justify-end`}
           />
-        </div>
-        <div className="flex flex-col items-center gap-1">
           {tied ? (
-            <Pill tone="neutral" size="sm">Tie</Pill>
+            <Pill
+              tone="neutral"
+              size="sm"
+              className="hidden lg:inline-flex lg:col-start-2 lg:justify-self-center"
+            >
+              Tie
+            </Pill>
           ) : (
-            <span className="text-[10px] uppercase tracking-[0.18em] text-foreground-subtle tabular">
+            <span className="hidden lg:block lg:col-start-2 text-[10px] uppercase tracking-[0.18em] text-foreground-subtle tabular text-center">
               {Math.abs(pair.margin).toFixed(2)}
             </span>
           )}
-        </div>
-        <div className="flex justify-start">
           <ScoreCell
             value={pair.b.matchup.points}
             precision={2}
             emphasis={!aWon || tied ? "primary" : "muted"}
-            className="font-display text-3xl"
+            className={`font-display text-2xl row-start-4 col-start-2 ${bTop === null ? "py-3" : "pt-3"} lg:py-0 lg:text-3xl lg:row-start-1 lg:col-start-3`}
           />
         </div>
-      </div>
-      {aTop || bTop ? (
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2.5 border-t border-border bg-background/40">
-          <TopPlayer spot={aTop} align="right" />
-          <span className="text-[9px] uppercase tracking-[0.18em] text-foreground-subtle font-medium px-1">
-            top
+
+        {aTop || bTop ? (
+          <div className="contents lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-2 lg:px-4 lg:py-2.5 lg:border-t lg:border-border lg:bg-background/40">
+            <TopPlayer spot={aTop} side="a" />
+            <span className="hidden lg:block lg:col-start-2 text-[9px] uppercase tracking-[0.18em] text-foreground-subtle font-medium px-1">
+              top
+            </span>
+            <TopPlayer spot={bTop} side="b" />
+          </div>
+        ) : null}
+
+        {/* Phone-only band between the two team blocks. It carries no player or
+            manager data — just the two static labels and the margin — so it is
+            the one thing here that is cheaper to keep than to place. */}
+        <div className="row-start-3 col-start-1 col-end-3 -mx-4 flex items-center justify-center gap-2 px-4 py-2 border-y border-border bg-background/40 lg:hidden">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-foreground-subtle font-medium">
+            vs
           </span>
-          <TopPlayer spot={bTop} align="left" />
+          {tied ? (
+            <Pill tone="neutral" size="sm">Tie</Pill>
+          ) : (
+            <span className="text-[10px] uppercase tracking-[0.18em] text-foreground-subtle tabular">
+              margin {Math.abs(pair.margin).toFixed(2)}
+            </span>
+          )}
         </div>
-      ) : null}
-      <div className="px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-foreground-subtle group-hover:text-foreground-muted transition-colors text-right">
+      </div>
+      <div className="px-4 py-3 lg:py-2 border-t border-border lg:border-t-0 text-[10px] uppercase tracking-[0.18em] text-foreground-subtle group-hover:text-foreground-muted transition-colors text-right">
         Open rivalry →
       </div>
     </Link>
   );
 }
 
+/**
+ * Manager identity for one side. Phones stack it above that team's score;
+ * from `lg` it is the mirrored top row of the card grid. Placement and the
+ * mirroring are `lg:` modifiers on one element, never a second element.
+ */
 function TeamHeader({
   manager,
   winner,
-  align,
+  side,
+  padBottom,
 }: {
   manager: Manager;
   winner: boolean;
-  align: "left" | "right";
+  side: "a" | "b";
+  /** Phone only: carries the block's bottom padding when no top scorer follows. */
+  padBottom: boolean;
 }) {
-  const isRight = align === "right";
+  const isA = side === "a";
   return (
     <div
-      className={`flex items-center gap-2 min-w-0 ${isRight ? "flex-row-reverse text-right" : ""}`}
+      className={`flex items-center gap-2 min-w-0 col-start-1 ${
+        padBottom ? "py-3" : "pt-3"
+      } lg:py-0 lg:row-start-1 ${
+        isA
+          ? "row-start-1 lg:col-start-1 lg:flex-row-reverse lg:text-right"
+          : "row-start-4 lg:col-start-3"
+      }`}
     >
       <ManagerAvatar manager={manager} size={28} ring="subtle" />
       <span className="flex flex-col min-w-0">
@@ -320,7 +382,7 @@ function TeamHeader({
 
 function TopPlayer({
   spot,
-  align,
+  side,
 }: {
   spot:
     | {
@@ -331,22 +393,34 @@ function TopPlayer({
         points: number;
       }
     | null;
-  align: "left" | "right";
+  side: "a" | "b";
 }) {
+  const isA = side === "a";
+  const place = isA
+    ? "row-start-2 col-start-1 col-end-3 lg:row-start-1 lg:col-start-1 lg:col-end-2"
+    : "row-start-5 col-start-1 col-end-3 lg:row-start-1 lg:col-start-3 lg:col-end-4";
   if (!spot) {
+    // The stacked phone layout simply omits an absent top scorer; the mirrored
+    // grid needs the placeholder to hold its column open.
     return (
       <span
-        className={`text-[11px] text-foreground-subtle ${align === "right" ? "text-right" : "text-left"}`}
+        className={`hidden lg:block text-[11px] text-foreground-subtle ${place} ${
+          isA ? "lg:text-right" : "lg:text-left"
+        }`}
       >
         —
       </span>
     );
   }
-  const isRight = align === "right";
   return (
     <div
-      className={`flex items-center gap-2 min-w-0 ${isRight ? "flex-row-reverse text-right" : ""}`}
+      className={`flex items-center gap-2 min-w-0 pt-2 pb-3 lg:py-0 ${place} ${
+        isA ? "lg:flex-row-reverse lg:text-right" : ""
+      }`}
     >
+      <span className="text-[9px] uppercase tracking-[0.18em] text-foreground-subtle font-medium shrink-0 lg:hidden">
+        top
+      </span>
       <PlayerImage
         playerId={spot.playerId}
         position={spot.position}
@@ -354,16 +428,20 @@ function TopPlayer({
         size={22}
         fallbackColor={positionColor(spot.position)}
       />
-      <span className={`flex flex-col min-w-0 ${isRight ? "items-end" : ""}`}>
+      <span
+        className={`flex flex-col min-w-0 flex-1 lg:flex-initial ${isA ? "lg:items-end" : ""}`}
+      >
         <span className="text-[11px] text-foreground-muted truncate">
           {spot.name}
         </span>
-        <span className="text-[9px] text-foreground-subtle tabular">
+        <span className="text-[9px] text-foreground-subtle tabular truncate">
           {spot.team ?? "FA"} · {spot.position}
         </span>
       </span>
       <span
-        className={`tabular text-[12px] font-medium text-foreground shrink-0 ${isRight ? "text-left" : "text-right"} w-12`}
+        className={`tabular text-[12px] font-medium text-foreground shrink-0 lg:w-12 ${
+          isA ? "lg:text-left" : "lg:text-right"
+        }`}
       >
         {spot.points.toFixed(1)}
       </span>

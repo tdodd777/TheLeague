@@ -7,6 +7,7 @@ import type { Manager } from "@/lib/types";
 
 import { listCachedSeasons, readAllTransactions, readPlayers } from "./cache";
 import { getManagers, type ManagerLookup } from "./managers";
+import { resolvePickOrigin } from "./trades";
 
 export type FeedTxType = "trade" | "waiver" | "free_agent" | "commissioner";
 
@@ -20,7 +21,19 @@ export interface TxPlayer {
 export interface TxPick {
   season: string;
   round: number;
+  /**
+   * roster_id of the original owner expressed in the pick's own draft season,
+   * carried forward by user_id. Join on this to reach that season's draft.
+   */
   originalRosterId: number;
+  /**
+   * roster_id exactly as the transaction recorded it. Scoped to the season the
+   * transaction happened in.
+   */
+  originalRosterIdAtTransaction: number;
+  /** Stable Sleeper user_id of the manager who owned the pick at the time. */
+  originalUserId: string | null;
+  /** Manager who owned the pick when the transaction happened. */
   originalManager: Manager | null;
 }
 
@@ -65,7 +78,7 @@ function buildOne(
   tx: SleeperTransaction,
   season: string,
   managers: ManagerLookup,
-  futureSeasonManagers: Map<string, ManagerLookup>,
+  managersBySeason: Map<string, ManagerLookup>,
   players: Record<string, SleeperPlayer>,
 ): FeedTransaction | null {
   if (tx.type === "commissioner") {
@@ -116,15 +129,14 @@ function buildOne(
   for (const pick of tx.draft_picks as SleeperTransactionDraftPick[]) {
     const recipient = partyMap.get(pick.owner_id);
     if (!recipient) continue;
-    const futureLookup = futureSeasonManagers.get(pick.season);
+    const origin = resolvePickOrigin(pick, managers, managersBySeason);
     recipient.picksReceived.push({
       season: pick.season,
       round: pick.round,
-      originalRosterId: pick.roster_id,
-      originalManager:
-        futureLookup?.byRosterId.get(pick.roster_id) ??
-        managers.byRosterId.get(pick.roster_id) ??
-        null,
+      originalRosterId: origin.rosterIdInPickSeason,
+      originalRosterIdAtTransaction: origin.rosterIdAtTransaction,
+      originalUserId: origin.userId,
+      originalManager: origin.manager,
     });
   }
 

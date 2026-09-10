@@ -9,7 +9,7 @@ export const metadata = {
 const PAGES: ReadonlyArray<{ href: string; label: string; hint: string }> = [
   { href: "/", label: "Home", hint: "live scores and the league pulse" },
   { href: "/standings", label: "Standings", hint: "playoff race and PF" },
-  { href: "/managers", label: "Managers", hint: "owners and rosters" },
+  { href: "/managers", label: "Managers", hint: "the twelve" },
   { href: "/rankings/dynasty", label: "Dynasty Rankings", hint: "long-term roster value" },
   { href: "/h2h", label: "Head to Head", hint: "every pair, every meeting" },
   { href: "/records", label: "Records", hint: "the bar to clear" },

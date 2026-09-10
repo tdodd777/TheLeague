@@ -240,7 +240,7 @@ export default async function AwardsPage() {
                   <Kicker>{s.season}</Kicker>
                   <Link
                     href={`/history/${s.season}`}
-                    className="text-[11px] text-foreground-muted hover:text-accent transition-colors"
+                    className="inline-flex min-h-11 lg:min-h-0 items-center text-[11px] text-foreground-muted hover:text-accent transition-colors focus-hairline"
                   >
                     full recap →
                   </Link>
@@ -291,7 +291,67 @@ export default async function AwardsPage() {
           description="Total hardware per manager: championships, runner-up finishes, third-place finishes, and regular-season titles."
           size="md"
         />
-        <Card variant="default" padding="none" className="overflow-x-auto">
+        {/* Phone: card rows. The seven-column table needed 1.4 screens of
+            horizontal panning and put counts behind 10px headers. */}
+        <ul className="lg:hidden border-y border-rule">
+          {allTimeTitles.map((t) => {
+            const hardware: Array<[string, string[]]> = [
+              ["🏆", t.championships],
+              ["2nd", t.runnersUp],
+              ["3rd", t.thirds],
+              ["Reg", t.regularSeason],
+              ["🚽", t.toiletBowls],
+            ];
+            const earned = hardware.filter(([, yrs]) => yrs.length > 0);
+            return (
+              <li
+                key={t.manager.userId}
+                className="border-b border-rule last:border-b-0 py-2.5"
+              >
+                <Link
+                  href={`/managers/${t.manager.username}`}
+                  className="flex min-h-11 items-center gap-3 focus-hairline"
+                >
+                  <ManagerAvatar manager={t.manager} size={30} ring="subtle" />
+                  <span className="flex-1 min-w-0 flex flex-col">
+                    <span className="text-sm text-foreground">
+                      {t.manager.displayName}
+                    </span>
+                    <span className="text-[11px] text-foreground-subtle tabular">
+                      @{t.manager.username}
+                    </span>
+                  </span>
+                </Link>
+                {earned.length > 0 ? (
+                  <ul className="mt-1.5 ml-[42px] flex flex-col gap-0.5">
+                    {earned.map(([label, yrs]) => (
+                      <li
+                        key={label}
+                        className="flex items-baseline gap-2 text-[11px]"
+                      >
+                        <span className="text-foreground-subtle uppercase tracking-[0.14em] w-8 shrink-0">
+                          {label}
+                        </span>
+                        <span className="tabular text-foreground-muted">
+                          {yrs.join(", ")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="mt-1 ml-[42px] block text-[11px] text-foreground-subtle">
+                    No hardware yet
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <Card
+          variant="default"
+          padding="none"
+          className="hidden lg:block overflow-x-auto"
+        >
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">

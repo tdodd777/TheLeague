@@ -1,12 +1,14 @@
 import type { MetadataRoute } from "next";
 
 import {
+  getAllTrades,
   getCurrentLeague,
   getManagers,
   listCachedSeasons,
 } from "@/lib/data";
+import { SITE_URL } from "@/lib/site-url";
 
-const SITE_URL = process.env["SITE_URL"] ?? "http://localhost:3000";
+import { tradesTotalPages } from "./transactions/trades/pageSize";
 
 const STATIC_ROUTES: ReadonlyArray<string> = [
   "/",
@@ -46,6 +48,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: now,
         changeFrequency: "weekly",
         priority: 0.6,
+      });
+    }
+
+    // Paged trade log. Page 2 up: page 1 is already declared above as
+    // /transactions/trades, which is also what /page/1 sets as its canonical,
+    // so listing it twice would advertise a duplicate. Derived from the same
+    // page size the routes use so the sitemap can't outlive the page count.
+    const trades = await getAllTrades();
+    for (let p = 2; p <= tradesTotalPages(trades.length); p += 1) {
+      entries.push({
+        url: `${SITE_URL}/transactions/trades/page/${p}`,
+        lastModified: now,
+        changeFrequency: "weekly",
+        priority: 0.5,
       });
     }
 

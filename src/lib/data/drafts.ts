@@ -44,6 +44,30 @@ async function readDraftPicks(
   );
 }
 
+/**
+ * The league's published draft order for a season, keyed by user_id.
+ *
+ * Sleeper keys `draft_order` by user_id, which is the one identifier that
+ * survives a season rollover, so this is the authoritative answer for who owns
+ * which slot. `drafts.json` normally carries it; the per-draft detail file is
+ * checked as a backstop. Null means Sleeper has not set an order yet.
+ */
+async function readDraftOrder(
+  season: string,
+  draft: SleeperDraft,
+): Promise<Record<string, number> | null> {
+  if (draft.draft_order && Object.keys(draft.draft_order).length > 0) {
+    return draft.draft_order;
+  }
+  const detail = await readJsonOrNull<SleeperDraft>(
+    path.join(seasonDir(season), `draft-${draft.draft_id}.json`),
+  );
+  if (detail?.draft_order && Object.keys(detail.draft_order).length > 0) {
+    return detail.draft_order;
+  }
+  return null;
+}
+
 export interface DraftSummary {
   season: string;
   draft: SleeperDraft;
@@ -275,14 +299,41 @@ export async function getDraftRecap(
   };
 }
 
+export interface LiveDraftHandle {
+  season: string;
+  draftId: string;
+  /** Status as of the last ingest — live polling refines it in the browser. */
+  cachedStatus: SleeperDraft["status"];
+}
+
+/**
+ * The newest cached season's draft, when it has not completed as of the last
+ * ingest. This is what the live-draft components poll against: the static
+ * build can only know that a draft exists and where it lives, never whether
+ * it is running right now.
+ */
+export async function getLiveDraftHandle(): Promise<LiveDraftHandle | null> {
+  const seasons = await listCachedSeasons();
+  const newest = seasons[0];
+  if (!newest) return null;
+  const drafts = await readDrafts(newest).catch(() => []);
+  const draft = drafts[0];
+  if (!draft || draft.status === "complete") return null;
+  return {
+    season: newest,
+    draftId: draft.draft_id,
+    cachedStatus: draft.status,
+  };
+}
+
 export interface UpcomingDraftSlot {
-  /** 1-indexed expected pick slot (1 → first overall in that round). */
+  /** 1-indexed pick slot (1 → first overall in that round). */
   slot: number;
-  /** Current owner of this slot. */
+  /** Current owner of this slot, resolved in the upcoming season. */
   manager: Manager | null;
   /**
-   * Manager who originally held this slot (i.e. the team whose finishing
-   * position determines the slot). May differ if the pick was traded.
+   * Manager the slot belongs to before any trades, resolved in the upcoming
+   * season. Differs from `manager` when the pick has been traded away.
    */
   originalManager: Manager | null;
   /** True if the pick has been traded out of its original owner. */
@@ -294,21 +345,54 @@ export interface UpcomingDraftRound {
   slots: UpcomingDraftSlot[];
 }
 
+/**
+ * Where the slot order came from.
+ *
+ * - `sleeper` the league's own published draft order. Real.
+ * - `derived_standings` our guess, made by reversing a past season's standings.
+ * - `derived_roster_order` our fallback guess, roster order, when there is no
+ *   finished season to work from.
+ */
+export type UpcomingDraftOrderSource =
+  | "sleeper"
+  | "derived_standings"
+  | "derived_roster_order";
+
 export interface UpcomingDraftPreview {
   season: string;
-  /** Cached season we used to derive the projected order. */
+  /**
+   * Season a provisional order was derived from. Null when the league's own
+   * published order was used, because then nothing was derived.
+   */
   basisSeason: string | null;
+  /** Where the slot order came from. */
+  orderSource: UpcomingDraftOrderSource;
+  /** True when the order is our guess rather than the league's real order. */
+  provisional: boolean;
+  /** Plain-language note on where the order came from, safe to render as is. */
+  orderNote: string;
   rounds: UpcomingDraftRound[];
   /** Number of picks already traded into other hands. */
   totalTradedPicks: number;
 }
 
 /**
- * Project the upcoming draft order using:
- *   1. Reversed standings of the most recent completed season → assigns slots.
- *   2. traded_picks → reassigns ownership.
+ * The upcoming draft: who holds which slot, in which round.
  *
- * For dynasty, this is the canonical rookie-draft order.
+ * The order itself comes from the league's published `draft_order` whenever
+ * Sleeper has set one. That is the real answer, and it is keyed by user_id,
+ * the only identifier that survives a season rollover, so it is mapped through
+ * the upcoming season's own rosters.
+ *
+ * When no order is published we fall back to reversing the most recent
+ * finished season's standings. That is a guess, not the league's rule, so the
+ * result is marked `provisional` and carries a note saying so. Managers are
+ * matched across the two seasons by user_id, never by roster_id: roster
+ * numbers get reassigned between seasons, so roster 2 in 2025 and roster 2 in
+ * 2026 can be two different people.
+ *
+ * Ownership is then reassigned from `traded_picks`, which is already scoped to
+ * the upcoming season and so joins on roster_id safely.
  */
 export async function getUpcomingDraftPreview(): Promise<UpcomingDraftPreview | null> {
   const seasons = await listCachedSeasons();
@@ -316,42 +400,76 @@ export async function getUpcomingDraftPreview(): Promise<UpcomingDraftPreview | 
   const upcoming = seasons[0]!;
   const league = await readLeague(upcoming);
   const drafts = await readDrafts(upcoming).catch(() => []);
-  if (
-    drafts[0]?.status === "complete" ||
-    league.status === "complete"
-  ) {
+  const draft = drafts[0];
+  if (draft?.status === "complete" || league.status === "complete") {
     return null; // already drafted
-  }
-  // Find most recent season with games.
-  let basisSeason: string | null = null;
-  for (const s of seasons) {
-    if (s === upcoming) continue;
-    const standings = await getStandings(s);
-    if (standings.some((r) => r.wins + r.losses + r.ties > 0)) {
-      basisSeason = s;
-      break;
-    }
   }
 
   const upcomingManagers = await getManagers(upcoming);
   const rounds = league.settings.draft_rounds;
 
-  // Slot 1 = worst finisher in the basis season.
-  const slotByOriginalRoster = new Map<number, number>();
-  if (basisSeason) {
-    const basisStandings = await getStandings(basisSeason);
-    // Sleeper standings sort wins desc; reverse for draft order. The 12th-place
-    // team (worst record) gets slot 1 in dynasty rookie drafts.
-    const reversed = [...basisStandings].reverse();
-    reversed.forEach((row, i) => {
-      slotByOriginalRoster.set(row.rosterId, i + 1);
-    });
+  // The league's own order, keyed by user_id, mapped onto this season's rosters.
+  const publishedOrder = draft ? await readDraftOrder(upcoming, draft) : null;
+  const published = new Map<number, number>();
+  if (publishedOrder) {
+    for (const [userId, slot] of Object.entries(publishedOrder)) {
+      const manager = upcomingManagers.byUserId.get(userId);
+      if (manager) published.set(manager.rosterId, slot);
+    }
+  }
+
+  let slotByOriginalRoster: Map<number, number>;
+  let orderSource: UpcomingDraftOrderSource;
+  let basisSeason: string | null = null;
+  let orderNote: string;
+
+  if (published.size > 0) {
+    slotByOriginalRoster = published;
+    orderSource = "sleeper";
+    orderNote = `Draft order as published by the league for ${upcoming}.`;
   } else {
-    // No basis: roster_id ascending is a reasonable fallback.
-    const rosters = await readRosters(upcoming);
-    rosters.forEach((r, i) => {
-      slotByOriginalRoster.set(r.roster_id, i + 1);
-    });
+    // Most recent season that actually played games.
+    for (const s of seasons) {
+      if (s === upcoming) continue;
+      const standings = await getStandings(s);
+      if (standings.some((r) => r.wins + r.losses + r.ties > 0)) {
+        basisSeason = s;
+        break;
+      }
+    }
+    slotByOriginalRoster = new Map<number, number>();
+    if (basisSeason) {
+      const basisStandings = await getStandings(basisSeason);
+      // Standings come back best record first, so worst finisher last. Rank by
+      // user_id so a manager who changed roster number still lines up, and put
+      // anyone who was not in the basis season at the back, since they have no
+      // finish to reverse.
+      const finishByUserId = new Map<string, number>();
+      basisStandings.forEach((row, i) => {
+        finishByUserId.set(row.manager.userId, i);
+      });
+      const ordered = [...upcomingManagers.list].sort((a, b) => {
+        const af = finishByUserId.get(a.userId);
+        const bf = finishByUserId.get(b.userId);
+        if (af === undefined && bf === undefined) return a.rosterId - b.rosterId;
+        if (af === undefined) return 1;
+        if (bf === undefined) return -1;
+        return bf - af;
+      });
+      ordered.forEach((m, i) => {
+        slotByOriginalRoster.set(m.rosterId, i + 1);
+      });
+      orderSource = "derived_standings";
+      orderNote = `Provisional order, not the league's published one. The ${upcoming} order has not been set, so this reverses the ${basisSeason} standings as a stand in.`;
+    } else {
+      // Nothing to derive from. Roster order, purely so the board renders.
+      const rosters = await readRosters(upcoming);
+      rosters.forEach((r, i) => {
+        slotByOriginalRoster.set(r.roster_id, i + 1);
+      });
+      orderSource = "derived_roster_order";
+      orderNote = `Provisional order, not the league's published one. The ${upcoming} order has not been set and there is no finished season to work from, so teams are listed in roster order.`;
+    }
   }
 
   const tradedPicks = await readTradedPicks(upcoming).catch(() => []);
@@ -365,9 +483,9 @@ export async function getUpcomingDraftPreview(): Promise<UpcomingDraftPreview | 
   }
 
   const out: UpcomingDraftRound[] = [];
-  // Build round 1, then round 2, etc. Slots are derived from the basis season
-  // and stay the same per round (snake-style logic doesn't apply to dynasty
-  // rookie drafts, which are linear).
+  // Build round 1, then round 2, etc. Slots hold the same order in every round
+  // (snake-style logic doesn't apply to dynasty rookie drafts, which are
+  // linear).
   const slotEntries = [...slotByOriginalRoster.entries()].sort(
     (a, b) => a[1] - b[1],
   );
@@ -390,6 +508,9 @@ export async function getUpcomingDraftPreview(): Promise<UpcomingDraftPreview | 
   return {
     season: upcoming,
     basisSeason,
+    orderSource,
+    provisional: orderSource !== "sleeper",
+    orderNote,
     rounds: out,
     totalTradedPicks: seasonTraded.length,
   };

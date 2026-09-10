@@ -21,6 +21,7 @@ import {
   getManagers,
   getSeasonPlacements,
   getStandings,
+  getWeekBounds,
   getWeeklyPointsByRoster,
   listCachedSeasons,
   readLeague,
@@ -51,8 +52,11 @@ export async function generateMetadata({ params }: PageProps) {
 }
 
 interface StandingsRow extends SeasonStanding {
-  rank: number;
+  /** Regular-season standings position, i.e. the playoff seed. */
+  seed: number;
+  /** True final placement from the playoff bracket. */
   finalPlace: number | null;
+  /** Regular-season weekly points, matching the record and PF beside them. */
   weekly: number[];
   weeklyTotal: number;
 }
@@ -68,7 +72,9 @@ export default async function HistoryYearPage({ params }: PageProps) {
       getStandings(year),
       getSeasonPlacements(year),
       getManagers(year),
-      getWeeklyPointsByRoster(year),
+      // Regular season: the PF column and W-L on this table stop at the
+      // playoffs, so the sparkline next to them has to as well.
+      getWeeklyPointsByRoster(year, { scope: "regular" }),
       getBiggestTradeOfSeason(year).catch(() => null),
       readWinnersBracket(year),
       readLosersBracket(year),
@@ -96,23 +102,37 @@ export default async function HistoryYearPage({ params }: PageProps) {
     const wkly = weekly.get(s.rosterId) ?? [];
     return {
       ...s,
-      rank: i + 1,
+      seed: i + 1,
       finalPlace: placements.byRosterId.get(s.rosterId) ?? null,
       weekly: wkly,
       weeklyTotal: wkly.reduce((a, b) => a + b, 0),
     };
   });
+  // Rank by where the bracket left everyone, not by regular-season seed. A team
+  // the bracket never placed sorts after everyone it did.
+  // Fall back to seed, not to 99. Mid-playoffs the bracket has not placed the
+  // two finalists yet, and sorting unplaced teams last put the #1 and #2 seeds
+  // below the team that finished 12th, on championship week of all weeks.
+  rows.sort((a, b) => (a.finalPlace ?? a.seed) - (b.finalPlace ?? b.seed));
 
-  // Top 5 single-week scores in this season.
-  const weekScores: Array<{ manager: Manager; week: number; points: number }> = [];
-  for (let week = 1; week <= 18; week += 1) {
+  // Top single-week scores. Record-book scope, so a week 16 title-game
+  // explosion counts; each row is tagged with which phase it came from.
+  const { lastWeek, regularSeasonEndWeek } = await getWeekBounds(year, "all");
+  const weekScores: Array<{
+    manager: Manager;
+    week: number;
+    points: number;
+    isPlayoff: boolean;
+  }> = [];
+  for (let week = 1; week <= lastWeek; week += 1) {
     const matchups = await readMatchups(year, week);
     if (!matchups) continue;
+    const isPlayoff = week > regularSeasonEndWeek;
     for (const m of matchups) {
       if (m.points === 0) continue;
       const manager = managers.byRosterId.get(m.roster_id);
       if (!manager) continue;
-      weekScores.push({ manager, week, points: m.points });
+      weekScores.push({ manager, week, points: m.points, isPlayoff });
     }
   }
   const topWeeklyScores = [...weekScores]
@@ -140,8 +160,8 @@ export default async function HistoryYearPage({ params }: PageProps) {
                     href={`/history/${s}`}
                     className={
                       s === year
-                        ? "px-3 py-1 rounded-md bg-foreground/[0.06] text-foreground text-xs font-medium tabular"
-                        : "px-3 py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-xs tabular transition-colors"
+                        ? "inline-flex min-h-11 lg:min-h-0 items-center px-3 lg:py-1 rounded-md bg-foreground/[0.06] text-foreground text-sm lg:text-xs font-medium tabular focus-hairline"
+                        : "inline-flex min-h-11 lg:min-h-0 items-center px-3 lg:py-1 rounded-md text-foreground-muted hover:text-foreground hover:bg-foreground/[0.03] text-sm lg:text-xs tabular transition-colors focus-hairline"
                     }
                   >
                     {s}
@@ -175,7 +195,12 @@ export default async function HistoryYearPage({ params }: PageProps) {
 
       {/* FINAL STANDINGS */}
       <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 sm:mt-14 flex flex-col gap-4">
-        <Kicker>Final Standings</Kicker>
+        <div className="flex items-baseline justify-between gap-3">
+          <Kicker>Final Standings</Kicker>
+          <span className="text-[11px] text-foreground-subtle">
+            Ordered by playoff finish · seed is the regular season position
+          </span>
+        </div>
         <FinalStandingsTable rows={rows} />
       </section>
 
@@ -211,7 +236,12 @@ export default async function HistoryYearPage({ params }: PageProps) {
       {/* WEEKLY SCORING LEADERBOARD */}
       {topWeeklyScores.length > 0 ? (
         <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 sm:mt-14 flex flex-col gap-4">
-          <Kicker>Top Single-Week Scores</Kicker>
+          <div className="flex items-baseline justify-between gap-3">
+            <Kicker>Top Single-Week Scores</Kicker>
+            <span className="text-[11px] text-foreground-subtle">
+              Playoff weeks included
+            </span>
+          </div>
           <Card variant="default" padding="lg">
             <ol className="flex flex-col">
               {topWeeklyScores.map((s, i) => (
@@ -231,6 +261,7 @@ export default async function HistoryYearPage({ params }: PageProps) {
                   </Link>
                   <span className="text-[11px] tabular text-foreground-subtle whitespace-nowrap">
                     wk {s.week}
+                    {s.isPlayoff ? " · playoffs" : ""}
                   </span>
                   <ScoreCell value={s.points} precision={2} />
                 </li>
@@ -302,8 +333,8 @@ function FinalStandingsTable({ rows }: { rows: StandingsRow[] }) {
   const columns: Array<DataTableColumn<StandingsRow>> = [
     {
       key: "place",
-      header: "Final",
-      width: "60px",
+      header: "Finish",
+      width: "64px",
       cell: (r) =>
         r.finalPlace !== null ? (
           <Pill
@@ -322,6 +353,15 @@ function FinalStandingsTable({ rows }: { rows: StandingsRow[] }) {
             —
           </Pill>
         ),
+    },
+    {
+      key: "seed",
+      header: "Seed",
+      width: "56px",
+      align: "right",
+      cell: (r) => (
+        <span className="text-xs tabular text-foreground-subtle">{r.seed}</span>
+      ),
     },
     {
       key: "manager",
@@ -369,7 +409,6 @@ function FinalStandingsTable({ rows }: { rows: StandingsRow[] }) {
             width={120}
             height={20}
             stroke="var(--accent-primary)"
-            fillGradient
             className="text-accent"
           />
         ) : null,
@@ -397,11 +436,46 @@ function FinalStandingsTable({ rows }: { rows: StandingsRow[] }) {
     },
   ];
   return (
-    <DataTable
-      columns={columns}
-      rows={rows}
-      rowKey={(r) => r.rosterId}
-      caption="Final standings"
-    />
+    <>
+      {/* Card stack is canonical through `lg` (README §8); DataTable is desktop-only. */}
+      <ul className="lg:hidden border-y border-rule">
+        {rows.map((r) => (
+          <li
+            key={r.rosterId}
+            className="flex items-center gap-3 border-b border-rule last:border-b-0 py-2.5"
+          >
+            <span
+              className="font-display italic text-[17px] text-foreground-subtle w-7 shrink-0 tabular"
+              aria-label={
+                r.finalPlace !== null
+                  ? `Finished ${r.finalPlace}`
+                  : `Seed ${r.seed}, no playoff finish recorded`
+              }
+            >
+              {r.finalPlace ?? "—"}
+            </span>
+            <ManagerAvatar manager={r.manager} size={30} ring="subtle" />
+            <span className="flex-1 min-w-0 flex flex-col">
+              <span className="text-sm text-foreground">
+                {r.manager.displayName}
+              </span>
+              <span className="text-[11px] tabular text-foreground-subtle">
+                {r.wins}-{r.losses}
+                {r.ties ? `-${r.ties}` : ""} · {r.pf.toFixed(1)} PF · seed #
+                {r.seed}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden lg:block">
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(r) => r.rosterId}
+          caption="Final standings"
+        />
+      </div>
+    </>
   );
 }

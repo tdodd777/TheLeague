@@ -1,5 +1,6 @@
 import { listCachedSeasons, readMatchups, readRosters, readUsers } from "./cache";
 import { buildManagerLookup } from "./managers";
+import { getWeekBounds } from "./weekly";
 import type { Manager } from "@/lib/types";
 
 export interface H2HCell {
@@ -29,8 +30,9 @@ export interface H2HMeeting {
 
 export interface H2HMatrix {
   managers: Manager[];
-  /** managerA.userId -> managerB.userId -> cell. */
+  /** managerA.userId -> managerB.userId -> cell. All-time, playoffs included. */
   cells: Map<string, Map<string, H2HCell>>;
+  /** Every meeting between the pair, playoffs included, oldest first. */
   meetings: Map<string, Map<string, H2HMeeting[]>>;
 }
 
@@ -75,6 +77,13 @@ function getMeetings(
 /**
  * Build the all-time H2H matrix across every cached season. Aggregated by
  * Sleeper user_id (so a manager who switched teams stays consistent).
+ *
+ * All-time means playoffs included — see the comment on the week loop below.
+ * The bracket does decide who meets whom, so playoff meetings are not
+ * schedule-given, but on a page promising "all-time records" the championship
+ * game is the last meeting anyone would accept missing. Surfaces that render
+ * these numbers must say "playoffs included" rather than implying a
+ * regular-season record.
  */
 export async function buildH2HMatrix(): Promise<H2HMatrix> {
   const seasons = await listCachedSeasons();
@@ -99,7 +108,15 @@ export async function buildH2HMatrix(): Promise<H2HMatrix> {
   const meetings = new Map<string, Map<string, H2HMeeting[]>>();
 
   for (const { season, map } of rosterMaps) {
-    for (let week = 1; week <= 18; week += 1) {
+    // All-time includes the playoffs. Scoping this to the regular season
+    // dropped 42 real games across three seasons, among them all three
+    // championships, while the page still promised "all-time records" and the
+    // rivalry page kept a `Playoffs` pill that could never render. On a site
+    // whose job is settling arguments, the title game is the last meeting you
+    // would want missing. Ghost weeks are already excluded below: rows with a
+    // null `matchup_id` land in one bucket and fail the `length !== 2` check.
+    const { lastWeek } = await getWeekBounds(season, "all");
+    for (let week = 1; week <= lastWeek; week += 1) {
       const matchups = await readMatchups(season, week);
       if (!matchups) continue;
       // Group by matchup_id.

@@ -15,7 +15,7 @@ interface StatTileProps {
   accent?: StatTileAccent;
   /**
    * Animate count-up when value is numeric and tile enters viewport.
-   * Default: false (per ARCHITECTURE.md §7 motion budget). Opt-in for hero metrics only.
+   * Default: false (per DESIGN.md motion budget). Opt-in for hero metrics only.
    */
   animate?: boolean;
   precision?: 0 | 1 | 2;
@@ -25,6 +25,8 @@ interface StatTileProps {
   className?: string;
 }
 
+// 1px semantic left rule. Was `before:w-[2px]`, which README §8 bans as a
+// decorative side-stripe; 1px as state is explicitly allowed.
 const ACCENT_BORDER: Record<NonNullable<StatTileAccent>, string> = {
   primary: "before:bg-accent",
   secondary: "before:bg-accent-secondary",
@@ -47,10 +49,13 @@ export function StatTile({
   return (
     <div
       className={cn(
-        "relative flex flex-col gap-1.5 rounded-lg border border-border bg-surface px-4 py-3.5 overflow-hidden",
+        // Phone: tighter padding and gap so a 4-tile grid costs about half the
+        // vertical space it used to. Tile walls were pushing real content two
+        // or more screens down on mobile.
+        "relative flex flex-col gap-1 sm:gap-1.5 rounded-lg border border-border bg-surface px-3 py-2.5 sm:px-4 sm:py-3.5 overflow-hidden",
         accent
           ? cn(
-              "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[2px]",
+              "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-px",
               ACCENT_BORDER[accent],
             )
           : "",
@@ -69,7 +74,7 @@ export function StatTile({
             suffix={suffix}
           />
         ) : (
-          <span className="text-2xl sm:text-3xl font-medium tabular leading-none text-foreground">
+          <span className="text-xl sm:text-3xl font-medium tabular leading-none text-foreground">
             {prefix}
             {isNumeric
               ? value.toLocaleString("en-US", {
@@ -93,7 +98,6 @@ export function StatTile({
             width={140}
             height={28}
             stroke="var(--accent-primary)"
-            fillGradient
             className="text-accent w-full"
           />
         </div>
@@ -188,7 +192,7 @@ function CountUp({
   return (
     <span
       ref={spanRef}
-      className="text-2xl sm:text-3xl font-medium tabular leading-none text-foreground"
+      className="text-xl sm:text-3xl font-medium tabular leading-none text-foreground"
     >
       {format(resolved, precision, prefix, suffix)}
     </span>

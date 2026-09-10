@@ -49,13 +49,16 @@ export function BracketView({
           {title}
         </span>
       ) : null}
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      {/* Phone: rounds stack vertically. Two 200px rounds plus the gap need
+          412px inside a ~310px card, so the horizontal layout forced panning
+          to follow a team's advancement. */}
+      <div className="flex flex-col lg:flex-row gap-3 lg:overflow-x-auto pb-2">
         {orderedRounds.map((round) => {
           const games = (rounds.get(round) ?? []).sort((a, b) => a.m - b.m);
           return (
             <div
               key={round}
-              className="flex flex-col gap-2 min-w-[200px] sm:min-w-[220px]"
+              className="flex flex-col gap-2 lg:min-w-[200px] xl:min-w-[220px]"
             >
               <span className="text-[10px] uppercase tracking-[0.18em] text-foreground-subtle">
                 Round {round}
@@ -174,7 +177,7 @@ function BracketRow({
     <Link
       href={`/managers/${manager.username}`}
       className={cn(
-        "flex items-center gap-2 text-xs h-7 group",
+        "flex items-center gap-2 text-xs min-h-11 lg:min-h-0 lg:h-7 group focus-hairline",
         dim ? "opacity-50" : "",
       )}
       title={

@@ -7,7 +7,7 @@ interface SkeletonProps {
 /**
  * Hairline-aesthetic skeleton placeholder. No rounded shimmer block —
  * a 1px hairline-ruled stripe with a subtle pulse, matching the row
- * primitive used everywhere else (per ARCHITECTURE.md §7).
+ * primitive used everywhere else (per DESIGN.md).
  */
 export function Skeleton({ className }: SkeletonProps) {
   return (

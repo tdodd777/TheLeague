@@ -2,24 +2,13 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import Link from "next/link";
 
+import { BottomTabBar } from "@/components/BottomTabBar";
 import { CommandPaletteRoot } from "@/components/command/CommandPaletteRoot";
+import { DraftLiveBanner } from "@/components/live/DraftLiveBanner";
 import { LiveBanner } from "@/components/live/LiveBanner";
 import { MobileNav } from "@/components/MobileNav";
 import { NavLinks } from "@/components/NavLinks";
-
-const NAV_LINKS: ReadonlyArray<{ href: string; label: string }> = [
-  { href: "/", label: "Home" },
-  { href: "/standings", label: "Standings" },
-  { href: "/managers", label: "Managers" },
-  { href: "/rankings/dynasty", label: "Rankings" },
-  { href: "/matchups", label: "Matchups" },
-  { href: "/h2h", label: "H2H" },
-  { href: "/records", label: "Records" },
-  { href: "/history", label: "History" },
-  { href: "/awards", label: "Awards" },
-  { href: "/transactions", label: "Transactions" },
-  { href: "/drafts", label: "Drafts" },
-];
+import { NAV_LINKS } from "@/components/nav-active";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -29,7 +18,8 @@ import {
   LEAGUE_YEAR_SHORT,
 } from "@/config/site";
 import { getCommandCoreIndex } from "@/lib/search/command-index";
-import { getCurrentLeague, getManagers } from "@/lib/data";
+import { getCurrentLeague, getLiveDraftHandle, getManagers } from "@/lib/data";
+import { SITE_URL } from "@/lib/site-url";
 
 import "./globals.css";
 
@@ -52,11 +42,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env["SITE_URL"] ??
-      process.env["URL"] ??
-      "http://localhost:3000",
-  ),
+  metadataBase: new URL(SITE_URL),
   title: `${LEAGUE_NAME} · ${LEAGUE_YEAR}`,
   description: LEAGUE_DESCRIPTION,
 };
@@ -81,6 +67,9 @@ export default async function RootLayout({
     avatarUrl: m.avatarUrl,
   }));
   const commandIndex = await getCommandCoreIndex();
+  // Null once the newest cached draft is complete, so for most of the year
+  // the banner (and its poll loop) is compiled out of the page entirely.
+  const liveDraft = await getLiveDraftHandle();
 
   return (
     <html
@@ -96,19 +85,27 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className="antialiased min-h-screen flex flex-col">
+      {/* Bottom padding keeps content and the footer clear of the fixed tab
+          bar (3.5rem + home-indicator inset) below `lg`. */}
+      <body className="antialiased min-h-screen flex flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
         <header className="sticky top-0 z-30 backdrop-blur-md bg-background/70 border-b border-border">
           <nav className="mx-auto flex max-w-6xl items-center gap-2 px-4 sm:px-6 h-14">
             <Link
               href="/"
-              className="mr-3 flex items-baseline gap-1.5 group"
-              aria-label={`${LEAGUE_NAME} — home`}
+              // No aria-label: the visible wordmark text is the accessible
+              // name, so it can never drift out of sync with the screen.
+              // Lighthouse label-content-name-mismatch flagged every
+              // hand-written variant over whitespace differences. The inner
+              // span keeps the baseline alignment while the link grows to 44px.
+              className="mr-3 inline-flex min-h-11 items-center group"
             >
-              <span className="font-display text-[22px] text-foreground leading-none whitespace-nowrap">
-                {LEAGUE_NAME}
-              </span>
-              <span className="text-[10px] tabular text-foreground-subtle uppercase tracking-[0.18em] pt-0.5">
-                &rsquo;{LEAGUE_YEAR_SHORT}
+              <span className="flex items-baseline gap-1.5">
+                <span className="font-display text-[22px] text-foreground leading-none">
+                  {LEAGUE_NAME}
+                </span>
+                <span className="text-[10px] tabular text-foreground-subtle uppercase tracking-[0.18em] pt-0.5">
+                  &rsquo;{LEAGUE_YEAR_SHORT}
+                </span>
               </span>
             </Link>
 
@@ -133,6 +130,13 @@ export default async function RootLayout({
         <div className="flex-1">{children}</div>
 
         <LiveBanner leagueId={league.league_id} managers={liveManagers} />
+        {liveDraft ? (
+          <DraftLiveBanner
+            draftId={liveDraft.draftId}
+            season={liveDraft.season}
+            managers={managers.list}
+          />
+        ) : null}
         <PwaRegister />
 
         <footer className="mt-16 border-t border-border">
@@ -141,12 +145,12 @@ export default async function RootLayout({
               <span className="kicker kicker-muted">Built for</span>{" "}
               <span className="font-display text-[15px] text-foreground-muted">{LEAGUE_NAME}</span>
               {" · "}
-              static build · refreshed every 6h in-season
+              static build · refreshed every 6h in-season, less often off-season
             </span>
             <span className="flex items-center gap-4 tabular">
               <Link
                 href="/constitution"
-                className="hover:text-foreground transition-colors"
+                className="inline-flex min-h-11 lg:min-h-0 items-center hover:text-foreground transition-colors focus-hairline"
               >
                 Constitution
               </Link>
@@ -154,6 +158,8 @@ export default async function RootLayout({
             </span>
           </div>
         </footer>
+
+        <BottomTabBar />
       </body>
     </html>
   );

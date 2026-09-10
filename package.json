@@ -20,7 +20,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "test": "tsx --test src/lib/rankings/season-power.test.ts src/lib/rankings/team-strength.test.ts src/lib/rankings/week-strength.test.ts src/lib/rankings/pick-portfolio.test.ts src/lib/data/weekly.test.ts src/lib/data/matchups-index.test.ts src/lib/data/brackets.test.ts src/lib/sleeper/client.test.ts src/lib/fantasycalc/client.test.ts scripts/ingest.promotion.test.ts"
   },
   "dependencies": {
     "@mdx-js/loader": "^3.1.1",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@next/env": "15.5.18",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -10,6 +10,24 @@ import type { SleeperPlayer } from "@/lib/sleeper";
 
 import type { RankingMode, ValueSnapshot, ValuedAsset } from "./types";
 
+/**
+ * Positions the FantasyCalc feed does not price at all. The snapshot carries
+ * only QB/RB/WR/TE/PICK entries — zero kickers, zero defenses — so a rostered
+ * K or DEF resolves to no entry and lands at value 0 with `missing: true`.
+ *
+ * That 0 is not a valuation, it is the absence of one. Both are mandatory
+ * starting slots in this league (one K, one DEF, neither flex eligible), so
+ * every roster carries exactly the same two of them: holding them out shifts
+ * no ranking order and no relative comparison. Callers should name this set
+ * explicitly rather than letting a silent 0 pass for a price.
+ */
+export const UNVALUED_POSITIONS: ReadonlySet<string> = new Set(["K", "DEF"]);
+
+/** True if the snapshot carries no valuations for this position at all. */
+export function isUnvaluedPosition(position: string): boolean {
+  return UNVALUED_POSITIONS.has(position);
+}
+
 export interface ResolvedSnapshot {
   /** sleeperId → entry. */
   byPlayerId: Map<string, FantasyCalcEntry>;

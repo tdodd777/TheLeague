@@ -51,3 +51,16 @@ export function formatPickLabel(season: number, round: number, slot: number | nu
   }
   return `${season} R${round}`;
 }
+
+/**
+ * Rank → semantic color, for the team overview ring and its strength bars.
+ * Top third positive, middle accent, bottom subtle. Always paired with the
+ * printed ordinal, so color is never the only signal.
+ */
+export function rankTone(rank: number, total: number): string {
+  const safeTotal = Math.max(1, total);
+  const third = safeTotal / 3;
+  if (rank <= third) return "var(--positive)";
+  if (rank <= third * 2) return "var(--accent-primary)";
+  return "var(--foreground-subtle)";
+}
