@@ -1,0 +1,21 @@
+[build]
+  # Ingest pulls fresh Sleeper + FantasyCalc data on every build, so the
+  # site reflects the latest league state without committing data/ snapshots.
+  command = "npm run ingest && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Use the official Next.js plugin for App Router support on Netlify.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Hashed Next.js static assets are immutable — fingerprinted filenames are
+# regenerated on each build, so we can let browsers and Netlify's CDN hold
+# them for a year. The plugin should already do this, but the explicit rule
+# silences Lighthouse's "Use efficient cache lifetimes" audit.
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

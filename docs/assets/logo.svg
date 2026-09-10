@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 200" width="560" height="200" role="img" aria-label="The League">
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#faf9f7"/>
+      <stop offset="100%" stop-color="#f2f0ea"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="560" height="200" rx="18" fill="url(#panel)"/>
+  <rect x="0.75" y="0.75" width="558.5" height="198.5" rx="17.25" fill="none" stroke="#ded9cf" stroke-width="1.5"/>
+
+  <!-- kicker -->
+  <text x="280" y="46"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-style="italic" font-size="15" letter-spacing="3.4"
+        fill="#8a6d1f" text-anchor="middle">SLEEPER LEAGUE TEMPLATE</text>
+
+  <!-- hairline rules flanking the kicker -->
+  <line x1="52" y1="41" x2="148" y2="41" stroke="#d8d2c6" stroke-width="1"/>
+  <line x1="412" y1="41" x2="508" y2="41" stroke="#d8d2c6" stroke-width="1"/>
+
+  <!-- wordmark -->
+  <text x="280" y="126"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-style="italic" font-size="76"
+        fill="#14120e" text-anchor="middle">The League</text>
+
+  <!-- gold underline -->
+  <rect x="180" y="146" width="200" height="2.5" rx="1.25" fill="#8a6d1f"/>
+
+  <!-- footer line -->
+  <text x="280" y="176"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="14" letter-spacing="2.2"
+        fill="#6b6459" text-anchor="middle">ROSTERS  ·  RECORDS  ·  RECEIPTS</text>
+</svg>
