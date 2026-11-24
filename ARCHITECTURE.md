@@ -208,7 +208,7 @@ Path alias: `@/*` → `src/*`.
 /matchups                          Redirects to latest cached week
 /matchups/[season]/[week]          Matchup detail
 /managers                          Manager directory (hairline-row list)
-/managers/[username]               Manager profile (bio, career, team overview switcher, current roster)
+/managers/[username]               Manager profile (bio, career, franchise history, team overview switcher, current roster)
 /transactions                      All transactions, filterable
 /transactions/trades                Trades, page 1 (canonical), 10 per page
 /transactions/trades/page/[page]    Trades, pages 2+ (statically enumerated; anything past the last page 404s)

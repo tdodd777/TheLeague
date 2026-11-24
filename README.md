@@ -58,7 +58,7 @@ rankings. Point it at one league ID and deploy. No database, no backend, no mont
 
 - FantasyCalc-driven roster value rankings
 - Contender quadrant: win-now versus future
-- Manager profiles with career stats
+- Manager profiles with career stats and franchise history
 - Thirty-day value trend for every roster
 
 </td>
@@ -89,7 +89,7 @@ page, a mobile layout with a bottom tab bar, and a PWA you can install to a phon
 
 <p align="center">
 <img src="docs/screenshots/05-manager-profile.png" alt="Manager profile" width="920">
-<br><sub><b>Manager profiles.</b> Career record, every season they have played, and a positional breakdown of the roster.</sub>
+<br><sub><b>Manager profiles.</b> Career record, every season they have played, a positional breakdown of the roster, and franchise history: all-time leading scorers, longest-tenured players and best single games, with notes on who was traded in or out.</sub>
 </p>
 
 <p align="center">
