@@ -14,6 +14,7 @@ export * from "./trade-stats";
 export * from "./drafts";
 export * from "./picks";
 export * from "./matchups-index";
+export * from "./franchise-history";
 export { DATA_DIR, LEAGUE_CACHE_DIR, PLAYERS_PATH, SNAPSHOT_DIR } from "./paths";
 
 import { listCachedSeasons, readLeague } from "./cache";

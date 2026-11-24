@@ -1,6 +1,7 @@
 import { Star } from "lucide-react";
 import { notFound } from "next/navigation";
 
+import { FranchiseHistorySection } from "@/components/franchise/FranchiseHistorySection";
 import { RosterValueSection } from "@/components/rankings/RosterValueSection";
 import {
   TeamOverviewCard,
@@ -24,6 +25,7 @@ import {
   findManagerByUsername,
   getCurrentLeague,
   getManagerCareer,
+  getManagerFranchiseHistory,
   getRosterByUserId,
   getStandings,
   getWeeklyPointsByRoster,
@@ -54,7 +56,11 @@ export default async function ManagerProfilePage({ params }: PageProps) {
 
   const { manager } = found;
   const override = managerOverrides[manager.userId];
-  const career = await getManagerCareer(manager.userId);
+  const [career, franchiseHistory, players] = await Promise.all([
+    getManagerCareer(manager.userId),
+    getManagerFranchiseHistory(manager.userId),
+    readPlayers(),
+  ]);
   const { season: currentSeason } = await getCurrentLeague();
   const currentRoster = await getRosterByUserId(currentSeason, manager.userId);
 
@@ -375,6 +381,11 @@ export default async function ManagerProfilePage({ params }: PageProps) {
         </section>
       ) : null}
 
+      {/* FRANCHISE HISTORY */}
+      {franchiseHistory ? (
+        <FranchiseHistorySection history={franchiseHistory} players={players} />
+      ) : null}
+
       {/* TEAM OVERVIEW */}
       {overviewViews.length > 0 ? (
         <section className="mx-auto max-w-6xl px-4 sm:px-6 mt-10 sm:mt-14">
@@ -406,7 +417,11 @@ export default async function ManagerProfilePage({ params }: PageProps) {
 
       {/* CURRENT ROSTER */}
       {currentRoster ? (
-        <CurrentRosterSection roster={currentRoster} season={currentSeason} />
+        <CurrentRosterSection
+          roster={currentRoster}
+          season={currentSeason}
+          seasonsHere={franchiseHistory?.seasonsByPlayer ?? null}
+        />
       ) : null}
     </main>
   );
@@ -415,9 +430,12 @@ export default async function ManagerProfilePage({ params }: PageProps) {
 async function CurrentRosterSection({
   roster,
   season,
+  seasonsHere,
 }: {
   roster: SeasonRoster;
   season: string;
+  /** Seasons each player has spent on this manager's team, this one included. */
+  seasonsHere: ReadonlyMap<string, number> | null;
 }) {
   const players = await readPlayers();
 
@@ -503,8 +521,11 @@ async function CurrentRosterSection({
                         <span className="text-sm text-foreground truncate">
                           {playerLabel(p, id)}
                         </span>
-                        <span className="text-[11px] text-foreground-subtle tabular truncate">
+                        <span className="text-[11px] text-foreground-subtle tabular break-words">
                           {p?.team ?? "FA"}
+                          {seasonsHere?.get(id)
+                            ? ` · ${seasonsHere.get(id)}y here`
+                            : ""}
                           {typeof p?.years_exp === "number"
                             ? ` · ${p.years_exp}y exp`
                             : ""}
